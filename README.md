@@ -88,3 +88,21 @@ npm run dev      # local dev server
 npm run build    # production build
 npm run preview  # preview production build
 ```
+
+## Auto-deploy with GitHub Actions
+
+This repo includes `.github/workflows/deploy-firebase-hosting.yml`.
+
+- Trigger: push to `main` (or manual run)
+- Pipeline: install deps -> run logic tests -> build -> deploy to Firebase Hosting
+
+### One-time setup
+
+1. Create a Firebase service account key:
+   - Firebase Console -> Project settings -> Service accounts
+   - Click **Generate new private key**
+2. In GitHub repo:
+   - Settings -> Secrets and variables -> Actions -> New repository secret
+   - Name: `FIREBASE_SERVICE_ACCOUNT`
+   - Value: paste the full JSON key content
+3. Push to `main` and the workflow will deploy automatically.
