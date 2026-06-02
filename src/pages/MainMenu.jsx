@@ -91,7 +91,7 @@ export default function MainMenu() {
   if (!authReady) {
     return (
       <PageLayout title="Kachuful">
-        <div className="py-12 text-center text-sm text-muted">Loading…</div>
+        <div className="my-auto py-12 text-center text-sm text-muted">Loading…</div>
       </PageLayout>
     )
   }
@@ -99,7 +99,7 @@ export default function MainMenu() {
   if (!isSignedIn) {
     return (
       <PageLayout title="Kachuful">
-        <div className="flex flex-1 flex-col justify-center gap-6">
+        <div className="mx-auto my-auto flex w-full max-w-xl flex-1 flex-col justify-center gap-6">
           <p className="text-center text-sm text-muted">
             Sign in to create or join a game with friends.
           </p>
@@ -118,58 +118,60 @@ export default function MainMenu() {
 
   return (
     <PageLayout title="Kachuful">
-      <section className="rounded-xl border border-border bg-surface-raised p-4">
-        <div className="flex items-center gap-3">
-          {user.photoURL ? (
-            <img src={user.photoURL} alt="" className="h-11 w-11 rounded-full" />
-          ) : (
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-sm font-semibold">
-              {displayName.charAt(0).toUpperCase()}
+      <div className="mx-auto my-auto w-full max-w-xl space-y-4">
+        <section className="rounded-xl border border-border bg-surface-raised p-4">
+          <div className="flex items-center gap-3">
+            {user.photoURL ? (
+              <img src={user.photoURL} alt="" className="h-11 w-11 rounded-full" />
+            ) : (
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-sm font-semibold">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">{displayName}</p>
+              <p className="truncate text-xs text-muted">{user.email}</p>
             </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-medium">{displayName}</p>
-            <p className="truncate text-xs text-muted">{user.email}</p>
+            <Button variant="ghost" className="shrink-0 px-3 py-2 text-xs" onClick={handleSignOut} disabled={busy}>
+              Sign out
+            </Button>
           </div>
-          <Button variant="ghost" className="shrink-0 px-3 py-2 text-xs" onClick={handleSignOut} disabled={busy}>
-            Sign out
-          </Button>
-        </div>
-      </section>
-
-      {localError ? (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          {localError}
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <section className="rounded-xl border border-border bg-surface-raised p-4 md:col-span-2">
-          <Button className="w-full py-3.5" onClick={handleCreateSession} disabled={busy}>
-            Create Session
-          </Button>
         </section>
 
-        <section className="rounded-xl border border-border bg-surface-raised p-4 md:col-span-2">
-          <label className="mb-2 block text-sm text-muted" htmlFor="code">
-            Join with session code
-          </label>
-          <input
-            id="code"
-            value={joinCode}
-            onChange={(e) => setJoinCode(normalizeSessionCode(e.target.value))}
-            placeholder="K7X2MQ"
-            maxLength={6}
-            className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-center font-mono text-lg tracking-[0.25em] text-text placeholder:text-muted/50 outline-none focus:border-accent"
-          />
-          <Button className="mt-3 w-full" variant="secondary" onClick={handleJoinSession} disabled={busy}>
-            Join Session
-          </Button>
-        </section>
+        {localError ? (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {localError}
+          </div>
+        ) : null}
 
-        <Button variant="ghost" className="w-full md:col-span-2" onClick={() => navigate('/history')}>
-          View Session History
-        </Button>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <section className="rounded-xl border border-border bg-surface-raised p-4 md:col-span-2">
+            <Button className="w-full py-3.5" onClick={handleCreateSession} disabled={busy}>
+              Create Session
+            </Button>
+          </section>
+
+          <section className="rounded-xl border border-border bg-surface-raised p-4 md:col-span-2">
+            <label className="mb-2 block text-sm text-muted" htmlFor="code">
+              Join with session code
+            </label>
+            <input
+              id="code"
+              value={joinCode}
+              onChange={(e) => setJoinCode(normalizeSessionCode(e.target.value))}
+              placeholder="K7X2MQ"
+              maxLength={6}
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-center font-mono text-lg tracking-[0.25em] text-text placeholder:text-muted/50 outline-none focus:border-accent"
+            />
+            <Button className="mt-3 w-full" variant="secondary" onClick={handleJoinSession} disabled={busy}>
+              Join Session
+            </Button>
+          </section>
+
+          <Button variant="ghost" className="w-full md:col-span-2" onClick={() => navigate('/history')}>
+            View Session History
+          </Button>
+        </div>
       </div>
     </PageLayout>
   )
