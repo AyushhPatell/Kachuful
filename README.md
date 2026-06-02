@@ -1,0 +1,84 @@
+# Kachuful
+
+Online multiplayer web app for **Kachuful**, the traditional Gujarati trick-taking card game. Friends join via a 6-digit session code — no install required.
+
+Based on the [Project Specification](./Kachuful_Project_Specification.docx) (v1.0).
+
+## Stack
+
+- **Frontend:** React (Vite), React Router, Tailwind CSS, Framer Motion
+- **Backend:** Firebase (Auth, Firestore, Realtime Database, Hosting)
+
+## Getting started
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Firebase setup
+
+1. Create a project at [Firebase Console](https://console.firebase.google.com/)
+2. Enable **Anonymous** and/or **Google** sign-in under Authentication
+3. Create a **Firestore** database
+4. Create a **Realtime Database** instance (for live card plays in later phases)
+5. Copy `.env.example` to `.env` and fill in your config values from Project Settings → Your apps → Web
+
+```bash
+cp .env.example .env
+```
+
+### 3. Run locally
+
+```bash
+npm run dev
+```
+
+Open the URL shown in the terminal (usually `http://localhost:5173`).
+
+## Project structure
+
+```
+src/
+  constants/game.js      # Sar suits, statuses, limits
+  lib/
+    cards.js             # Deck, shuffle, deal
+    gameLogic.js         # Scoring, sar rotation, trick evaluation
+    sessionCode.js       # 6-char code generation
+  firebase/              # Auth + Firestore session helpers
+  pages/                 # Main Menu, Lobby, Game, History
+  components/            # UI + playing cards
+```
+
+## Development phases
+
+| Phase | Status |
+|-------|--------|
+| **Phase 1 — Core Game** | In progress (scaffold, lobby, dealing, calling UI) |
+| **Phase 2 — Disconnect handling** | Not started |
+| **Phase 3 — Session history** | Not started |
+| **Phase 4 — Polish** | Not started |
+
+## What's built so far
+
+- Project scaffold with routing and card-game UI theme
+- Core game logic (scoring, sar rotation, mountain round cycle, trick evaluation)
+- Session create/join flow with owner approval in lobby
+- Real-time lobby via Firestore listeners
+- Game start: deal cards, calling phase, table + hand UI
+
+## Next up (Phase 1 completion)
+
+- Card play + trick resolution
+- Round summary + voting (next round / end session)
+- Final leaderboard + tie-breaking
+- Firestore security rules
+
+## Scripts
+
+```bash
+npm run dev      # local dev server
+npm run build    # production build
+npm run preview  # preview production build
+```

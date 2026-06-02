@@ -1,0 +1,44 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-surface: #16161a;
+  --color-surface-raised: #1f1f24;
+  --color-border: #2e2e36;
+  --color-muted: #71717a;
+  --color-text: #f4f4f5;
+  --color-accent: #dc2626;
+  --color-accent-hover: #ef4444;
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  background-color: #09090b;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(220, 38, 38, 0.12), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(255, 255, 255, 0.03), transparent);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  touch-action: manipulation;
+}
