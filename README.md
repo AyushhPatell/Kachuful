@@ -1,8 +1,6 @@
 # Kachuful
 
-Online multiplayer web app for **Kachuful**, the traditional Gujarati trick-taking card game. Friends join via a 6-digit session code — no install required.
-
-Based on the [Project Specification](./Kachuful_Project_Specification.docx) (v1.0).
+Online multiplayer web app for **Kachuful**. Players join via a 6-digit session code — no install required.
 
 ## Stack
 
@@ -20,7 +18,7 @@ npm install
 ### 2. Firebase setup
 
 1. Create a project at [Firebase Console](https://console.firebase.google.com/)
-2. Enable **Anonymous** and/or **Google** sign-in under Authentication
+2. Enable **Google** sign-in under Authentication
 3. Create a **Firestore** database
 4. Create a **Realtime Database** instance (for live card plays in later phases)
 5. Copy `.env.example` to `.env` and fill in your config values from Project Settings → Your apps → Web
@@ -67,6 +65,14 @@ src/
 - Session create/join flow with owner approval in lobby
 - Real-time lobby via Firestore listeners
 - Game start: deal cards, calling phase, table + hand UI
+
+## Responsive behavior
+
+- **Phone portrait (`<768px`)**: single-column flow, swipeable hand row, large touch targets.
+- **Phone landscape**: gameplay keeps horizontal hand scrolling to prevent card squeeze.
+- **Tablet (`>=768px`)**: game uses two-column layout (table/hand + side standings/call panel).
+- **Laptop/Desktop (`>=1024px`)**: wider spacing and stable side panel; hand wraps cleanly.
+- **Home-screen mode**: `site.webmanifest` + mobile-web-app meta tags enabled for app-like launch.
 
 ## Next up (Phase 1 completion)
 

@@ -143,30 +143,34 @@ export default function MainMenu() {
         </div>
       ) : null}
 
-      <Button className="w-full py-3.5" onClick={handleCreateSession} disabled={busy}>
-        Create Session
-      </Button>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <section className="rounded-xl border border-border bg-surface-raised p-4 md:col-span-2">
+          <Button className="w-full py-3.5" onClick={handleCreateSession} disabled={busy}>
+            Create Session
+          </Button>
+        </section>
 
-      <section className="rounded-xl border border-border bg-surface-raised p-4">
-        <label className="mb-2 block text-sm text-muted" htmlFor="code">
-          Join with session code
-        </label>
-        <input
-          id="code"
-          value={joinCode}
-          onChange={(e) => setJoinCode(normalizeSessionCode(e.target.value))}
-          placeholder="K7X2MQ"
-          maxLength={6}
-          className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-center font-mono text-lg tracking-[0.25em] text-text placeholder:text-muted/50 outline-none focus:border-accent"
-        />
-        <Button className="mt-3 w-full" variant="secondary" onClick={handleJoinSession} disabled={busy}>
-          Join Session
+        <section className="rounded-xl border border-border bg-surface-raised p-4 md:col-span-2">
+          <label className="mb-2 block text-sm text-muted" htmlFor="code">
+            Join with session code
+          </label>
+          <input
+            id="code"
+            value={joinCode}
+            onChange={(e) => setJoinCode(normalizeSessionCode(e.target.value))}
+            placeholder="K7X2MQ"
+            maxLength={6}
+            className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-center font-mono text-lg tracking-[0.25em] text-text placeholder:text-muted/50 outline-none focus:border-accent"
+          />
+          <Button className="mt-3 w-full" variant="secondary" onClick={handleJoinSession} disabled={busy}>
+            Join Session
+          </Button>
+        </section>
+
+        <Button variant="ghost" className="w-full md:col-span-2" onClick={() => navigate('/history')}>
+          View Session History
         </Button>
-      </section>
-
-      <Button variant="ghost" className="w-full" onClick={() => navigate('/history')}>
-        View Session History
-      </Button>
+      </div>
     </PageLayout>
   )
 }

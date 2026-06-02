@@ -96,7 +96,7 @@ export default function Game() {
           {!isSpectator && (callingPhase || playingPhase) ? (
             <section>
               <h2 className="mb-3 text-center text-xs uppercase tracking-wider text-muted">Your Hand</h2>
-              <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-2 md:flex-wrap md:justify-center md:overflow-visible landscape:flex-nowrap landscape:justify-start landscape:overflow-x-auto landscape:md:flex-wrap landscape:md:justify-center landscape:md:overflow-visible">
+              <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-2 landscape:flex-nowrap landscape:justify-start md:flex-wrap md:justify-center md:overflow-visible">
                 {(me?.hand ?? []).map((card) => (
                   <PlayingCard
                     key={card.id}

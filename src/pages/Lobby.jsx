@@ -89,54 +89,56 @@ export default function Lobby() {
         </button>
       </div>
 
-      <section className="rounded-xl border border-border bg-surface-raised p-4">
-        <h2 className="mb-3 text-sm font-medium text-muted">
-          Players ({activeCount}/{MIN_PLAYERS}+)
-        </h2>
-        <ul className="space-y-2">
-          {players.map((player) => (
-            <li key={player.id} className="flex items-center justify-between rounded-lg bg-surface px-4 py-3">
-              <span className="truncate pr-2">{player.name}</span>
-              <span className="text-xs text-muted">
-                {player.id === session?.ownerId ? 'Owner' : player.status}
-              </span>
-            </li>
-          ))}
-          {!players.length ? (
-            <li className="rounded-lg bg-surface px-4 py-3 text-sm text-muted">
-              Waiting for players…
-            </li>
-          ) : null}
-        </ul>
-      </section>
-
-      {isOwner && joinRequests.length ? (
+      <div className="grid gap-4 md:grid-cols-2">
         <section className="rounded-xl border border-border bg-surface-raised p-4">
-          <h2 className="mb-3 text-sm font-medium text-muted">Join requests</h2>
+          <h2 className="mb-3 text-sm font-medium text-muted">
+            Players ({activeCount}/{MIN_PLAYERS}+)
+          </h2>
           <ul className="space-y-2">
-            {joinRequests.map((request) => (
-              <li
-                key={request.userId}
-                className="flex flex-col gap-3 rounded-lg bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <span className="truncate">{request.name}</span>
-                <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex">
-                  <Button className="min-h-11 px-3 py-2 text-xs" onClick={() => handleAccept(request)}>
-                    Accept
-                  </Button>
-                  <Button
-                    variant="danger"
-                    className="min-h-11 px-3 py-2 text-xs"
-                    onClick={() => handleReject(request.userId)}
-                  >
-                    Reject
-                  </Button>
-                </div>
+            {players.map((player) => (
+              <li key={player.id} className="flex items-center justify-between rounded-lg bg-surface px-4 py-3">
+                <span className="truncate pr-2">{player.name}</span>
+                <span className="text-xs text-muted">
+                  {player.id === session?.ownerId ? 'Owner' : player.status}
+                </span>
               </li>
             ))}
+            {!players.length ? (
+              <li className="rounded-lg bg-surface px-4 py-3 text-sm text-muted">
+                Waiting for players…
+              </li>
+            ) : null}
           </ul>
         </section>
-      ) : null}
+
+        {isOwner && joinRequests.length ? (
+          <section className="rounded-xl border border-border bg-surface-raised p-4">
+            <h2 className="mb-3 text-sm font-medium text-muted">Join requests</h2>
+            <ul className="space-y-2">
+              {joinRequests.map((request) => (
+                <li
+                  key={request.userId}
+                  className="flex flex-col gap-3 rounded-lg bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <span className="truncate">{request.name}</span>
+                  <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex">
+                    <Button className="min-h-11 px-3 py-2 text-xs" onClick={() => handleAccept(request)}>
+                      Accept
+                    </Button>
+                    <Button
+                      variant="danger"
+                      className="min-h-11 px-3 py-2 text-xs"
+                      onClick={() => handleReject(request.userId)}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </div>
 
       {!isOwner && joinRequests.some((r) => r.userId === currentUserId) ? (
         <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">

@@ -2,7 +2,9 @@ import { motion } from 'framer-motion'
 import { SAR_INFO } from '../../constants/game.js'
 
 export default function PlayingCard({ card, faceDown = false, small = false, onClick, selected }) {
-  const size = small ? 'h-16 w-11 text-xs' : 'h-24 w-16 text-sm'
+  const size = small
+    ? 'h-16 w-11 text-xs sm:h-18 sm:w-12'
+    : 'h-24 w-16 text-sm sm:h-28 sm:w-20 sm:text-base landscape:h-20 landscape:w-14 landscape:text-xs md:h-24 md:w-16 md:text-sm lg:h-28 lg:w-20 lg:text-base'
   const suitColor = SAR_INFO.Ka.suit === card?.suit
     ? (card?.suit === 'hearts' || card?.suit === 'diamonds' ? 'text-red-600' : 'text-neutral-900')
     : (card?.suit === 'hearts' || card?.suit === 'diamonds' ? 'text-red-600' : 'text-neutral-900')
