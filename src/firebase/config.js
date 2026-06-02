@@ -7,14 +7,28 @@ function env(key) {
   return (import.meta.env[key] ?? '').trim()
 }
 
+// Firebase Web config is safe to ship client-side.
+// Keep env vars for flexibility, but provide defaults so CI-hosted builds work
+// even when GitHub Actions does not inject VITE_* values.
+const DEFAULT_FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyAKpcFJ7Dg_umclHjc2edp_vJky6HZ4NNA',
+  authDomain: 'kachuful-70077.firebaseapp.com',
+  projectId: 'kachuful-70077',
+  storageBucket: 'kachuful-70077.firebasestorage.app',
+  messagingSenderId: '77910224164',
+  appId: '1:77910224164:web:3a7d9373a1de0fc3ed17b1',
+  databaseURL: 'https://kachuful-70077-default-rtdb.firebaseio.com',
+}
+
 const firebaseConfig = {
-  apiKey: env('VITE_FIREBASE_API_KEY'),
-  authDomain: env('VITE_FIREBASE_AUTH_DOMAIN'),
-  projectId: env('VITE_FIREBASE_PROJECT_ID'),
-  storageBucket: env('VITE_FIREBASE_STORAGE_BUCKET'),
-  messagingSenderId: env('VITE_FIREBASE_MESSAGING_SENDER_ID'),
-  appId: env('VITE_FIREBASE_APP_ID'),
-  databaseURL: env('VITE_FIREBASE_DATABASE_URL'),
+  apiKey: env('VITE_FIREBASE_API_KEY') || DEFAULT_FIREBASE_CONFIG.apiKey,
+  authDomain: env('VITE_FIREBASE_AUTH_DOMAIN') || DEFAULT_FIREBASE_CONFIG.authDomain,
+  projectId: env('VITE_FIREBASE_PROJECT_ID') || DEFAULT_FIREBASE_CONFIG.projectId,
+  storageBucket: env('VITE_FIREBASE_STORAGE_BUCKET') || DEFAULT_FIREBASE_CONFIG.storageBucket,
+  messagingSenderId:
+    env('VITE_FIREBASE_MESSAGING_SENDER_ID') || DEFAULT_FIREBASE_CONFIG.messagingSenderId,
+  appId: env('VITE_FIREBASE_APP_ID') || DEFAULT_FIREBASE_CONFIG.appId,
+  databaseURL: env('VITE_FIREBASE_DATABASE_URL') || DEFAULT_FIREBASE_CONFIG.databaseURL,
 }
 
 export const isFirebaseConfigured = Boolean(
