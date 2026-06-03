@@ -1,6 +1,6 @@
 /**
- * A call is legal iff no completion of remaining players' calls can make
- * total tricks called equal to cardsPerRound.
+ * A call is legal iff players can still finish the round without the
+ * total tricks called equaling cardsPerRound.
  */
 export function isCallLegal(call, cardsPerRound, players, userId) {
   if (call < 0 || call > cardsPerRound) return false
@@ -14,7 +14,13 @@ export function isCallLegal(call, cardsPerRound, players, userId) {
   const minTotal = sumOthers + call
   const maxTotal = sumOthers + call + uncalled * cardsPerRound
 
-  return cardsPerRound < minTotal || cardsPerRound > maxTotal
+  // Illegal only when the only possible final total equals cardsPerRound.
+  const onlyPossibleTotal =
+    minTotal <= cardsPerRound &&
+    cardsPerRound <= maxTotal &&
+    minTotal === maxTotal
+
+  return !onlyPossibleTotal
 }
 
 export function getLegalCalls(cardsPerRound, players, userId) {
@@ -29,4 +35,11 @@ export function getCommittedCallsSum(players) {
   return players
     .filter((p) => p.status !== 'spectator' && p.call !== null && p.call !== undefined)
     .reduce((s, p) => s + p.call, 0)
+}
+
+export function getNextCaller(turnOrder, players) {
+  return turnOrder.find((id) => {
+    const player = players.find((p) => p.id === id)
+    return player && (player.call === null || player.call === undefined)
+  })
 }

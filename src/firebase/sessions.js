@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore'
 import { auth, db, isFirebaseConfigured } from './config.js'
 import { dealHands } from '../lib/cards.js'
-import { isCallLegal } from '../lib/callValidation.js'
+import { getNextCaller, isCallLegal } from '../lib/callValidation.js'
 import {
   calculateRoundPoints,
   evaluateTrickWinner,
@@ -251,11 +251,21 @@ export async function submitCall(code, roundNumber, userId, call) {
   const cardsPerRound = getCardsPerRound(roundNumber, session.maxRound)
   const turnOrder = session.turnOrder ?? []
 
+  if (session.currentTurn !== userId) {
+    throw new Error('Wait for your turn to call tricks.')
+  }
+
   await runTransaction(db, async (transaction) => {
+    const sessionDoc = await transaction.get(sessionsRef(code))
+    const liveSession = sessionDoc.data()
+    if (liveSession.currentTurn !== userId) {
+      throw new Error('Wait for your turn to call tricks.')
+    }
+
     const players = await Promise.all(
       turnOrder.map(async (id) => {
         const snap = await transaction.get(playerRef(code, id))
-        return { id, ...snap.data() }
+        return { id, ...snap.data(), status: snap.data()?.status ?? 'active' }
       }),
     )
 
@@ -266,6 +276,13 @@ export async function submitCall(code, roundNumber, userId, call) {
     }
 
     transaction.update(playerRef(code, userId), { call })
+
+    const updatedPlayers = players.map((p) => (p.id === userId ? { ...p, call } : p))
+    const nextCaller = getNextCaller(turnOrder, updatedPlayers)
+
+    if (nextCaller) {
+      transaction.update(sessionsRef(code), { currentTurn: nextCaller })
+    }
   })
 
   const refreshed = await Promise.all(

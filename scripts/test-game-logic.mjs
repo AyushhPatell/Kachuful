@@ -45,4 +45,11 @@ const twoPlayers = [
 assert.equal(isCallLegal(0, 1, twoPlayers, 'b'), false)
 assert.equal(isCallLegal(1, 1, twoPlayers, 'b'), true)
 
+const freshRound = [
+  { id: 'a', status: 'active', call: null },
+  { id: 'b', status: 'active', call: null },
+]
+assert.equal(isCallLegal(0, 1, freshRound, 'a'), true)
+assert.equal(isCallLegal(1, 1, freshRound, 'a'), true)
+
 console.log('All game logic checks passed.')

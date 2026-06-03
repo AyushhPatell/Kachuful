@@ -93,9 +93,10 @@ export default function Game() {
 
   const turnMessage = (() => {
     if (roundComplete) return 'Round complete — scores updated'
-    if (callingPhase) {
+    if (callingPhase && currentTurnPlayer) {
       if (me?.call != null) return 'Waiting for other players to call…'
-      return 'Calling phase — choose your tricks'
+      if (isMyTurn) return 'Your turn — choose how many tricks you will win'
+      return `Waiting for ${currentTurnPlayer.name} to call`
     }
     if (playingPhase && currentTurnPlayer) {
       if (isMyTurn) return 'Your turn — tap a card to play'
@@ -112,7 +113,7 @@ export default function Game() {
           {turnMessage ? (
             <p
               className={`rounded-full px-4 py-2 text-center text-sm ${
-                isMyTurn && playingPhase
+                isMyTurn && (playingPhase || callingPhase)
                   ? 'bg-accent/20 text-accent'
                   : 'bg-surface-raised text-muted'
               }`}
@@ -183,7 +184,13 @@ export default function Game() {
                   >
                     <span className="truncate pr-2">
                       {player.name}
-                      {player.id === session?.currentTurn && playingPhase ? ' • turn' : ''}
+                      {player.id === session?.currentTurn
+                        ? callingPhase
+                          ? ' • calling'
+                          : playingPhase
+                            ? ' • turn'
+                            : ''
+                        : ''}
                     </span>
                     <span className="text-right text-xs text-muted">
                       call {player.call ?? '…'} · won {player.tricksWon ?? 0} · {player.sessionScore}{' '}
@@ -194,7 +201,7 @@ export default function Game() {
               </ul>
             </section>
 
-            {!isSpectator && callingPhase && me?.call == null ? (
+            {!isSpectator && callingPhase && me?.call == null && isMyTurn ? (
               <CallPicker
                 cardsPerRound={cardsPerRound}
                 players={players}
@@ -202,6 +209,12 @@ export default function Game() {
                 onSubmit={handleSubmitCall}
                 busy={busy}
               />
+            ) : null}
+
+            {!isSpectator && callingPhase && me?.call == null && !isMyTurn ? (
+              <div className="rounded-xl border border-border bg-surface-raised p-4 text-center text-sm text-muted">
+                {currentTurnPlayer?.name ?? 'Another player'} is choosing their call first.
+              </div>
             ) : null}
 
             <Link to="/" className="block text-center text-sm text-muted hover:text-text">

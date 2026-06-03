@@ -112,3 +112,14 @@ This repo includes `.github/workflows/deploy-firebase-hosting.yml`.
 4. Push to `main` and the workflow deploys the web app automatically.
 
 If CI shows a Firestore rules step warning (`403` on `firestore.googleapis.com`), hosting still deploys. Rules can stay manual unless you grant the service account **Firebase Admin** (or Editor) in Google Cloud IAM.
+
+### Publish Firestore rules from your laptop (one-time, or when rules change)
+
+```bash
+npm install -g firebase-tools   # if needed
+firebase login
+cd /path/to/Kachuful
+npm run deploy:rules
+```
+
+You only need to do this again when `firestore.rules` changes — not on every app code push.

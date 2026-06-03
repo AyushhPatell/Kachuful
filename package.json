@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:logic": "node scripts/test-game-logic.mjs"
+    "test:logic": "node scripts/test-game-logic.mjs",
+    "deploy:rules": "npx firebase-tools deploy --only firestore:rules --project kachuful-70077"
   },
   "dependencies": {
     "firebase": "^12.14.0",
