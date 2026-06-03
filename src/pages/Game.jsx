@@ -4,8 +4,6 @@ import PageLayout from '../components/layout/PageLayout.jsx'
 import CallPicker from '../components/game/CallPicker.jsx'
 import GameTable from '../components/game/GameTable.jsx'
 import PlayingCard, { SarBadge } from '../components/game/PlayingCard.jsx'
-import RoundEndReveal from '../components/game/RoundEndReveal.jsx'
-import TrickReveal from '../components/game/TrickReveal.jsx'
 import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useJoinRequests } from '../hooks/useJoinRequests.js'
@@ -22,10 +20,11 @@ import {
   subscribeToRound,
   subscribeToSession,
 } from '../firebase/sessions.js'
-import { getCardsPerRound, getPlayableCards } from '../lib/gameLogic.js'
+import { getCardsPerRound, getPlayableCards, resolveSarForRound } from '../lib/gameLogic.js'
 import { ROUND_STATUS } from '../constants/game.js'
 
-const MID_TRICK_REVEAL_MS = 3000
+const TRICK_PAUSE_MS = 1400
+const COLLECT_MS = 900
 
 export default function Game() {
   const { code } = useParams()
@@ -41,7 +40,8 @@ export default function Game() {
   const [dealAnimation, setDealAnimation] = useState(false)
   const [newRequestPing, setNewRequestPing] = useState(false)
   const [pendingFromSubcollection, setPendingFromSubcollection] = useState(false)
-  const [roundEndSnapshot, setRoundEndSnapshot] = useState(null)
+  const [tablePhase, setTablePhase] = useState('playing')
+  const [frozenTrickReveal, setFrozenTrickReveal] = useState(null)
 
   const isOwner = session?.ownerId === currentUserId
   const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
@@ -54,14 +54,13 @@ export default function Game() {
   const isMyTurn = session?.currentTurn === currentUserId
   const isSpectator = me?.status === 'spectator' || (pendingJoin && !me)
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
+  const sar = resolveSarForRound(session, round)
 
-  const trickReveal = session?.lastTrickReveal
-  const isFinalTrickReveal = Boolean(trickReveal?.endsRound)
-  const callingPhase = round?.status === ROUND_STATUS.CALLING && !trickReveal
-  const playingPhase = round?.status === ROUND_STATUS.PLAYING && !trickReveal
+  const trickReveal = session?.lastTrickReveal ?? frozenTrickReveal
+  const callingPhase = round?.status === ROUND_STATUS.CALLING && tablePhase === 'playing'
+  const playingPhase = round?.status === ROUND_STATUS.PLAYING && tablePhase === 'playing'
   const roundComplete = round?.status === ROUND_STATUS.COMPLETE
   const scoresReady = Boolean(round?.results && Object.keys(round.results).length > 0)
-  const showRoundEnd = Boolean(roundEndSnapshot && (isFinalTrickReveal || roundComplete))
 
   const playableCards = useMemo(() => {
     if (!me?.hand || !playingPhase) return []
@@ -94,35 +93,64 @@ export default function Game() {
     return subscribeToRound(code, roundNumber, setRound)
   }, [code, roundNumber])
 
+  // Freeze trick data so animations can finish after server clears lastTrickReveal
   useEffect(() => {
-    if (!trickReveal?.endsRound || !trickReveal.at) return
-    setRoundEndSnapshot({
-      reveal: trickReveal,
-      roundNumber: session?.currentRound ?? roundNumber,
-    })
-  }, [trickReveal, session?.currentRound, roundNumber])
+    if (session?.lastTrickReveal?.at) {
+      setFrozenTrickReveal(session.lastTrickReveal)
+    }
+  }, [session?.lastTrickReveal?.at])
 
   useEffect(() => {
-    if (!trickReveal?.at) return undefined
+    const reveal = session?.lastTrickReveal
+    if (!reveal?.at) return undefined
 
-    if (trickReveal.endsRound) {
-      const timer = setTimeout(() => {
-        acknowledgeTrickReveal(code).catch((err) => setError(err.message))
-      }, 1500)
-      return () => clearTimeout(timer)
+    setTablePhase('trick-won')
+
+    const timers = []
+
+    if (reveal.endsRound) {
+      timers.push(
+        setTimeout(() => {
+          acknowledgeTrickReveal(code).catch((err) => setError(err.message))
+        }, TRICK_PAUSE_MS),
+      )
+      timers.push(setTimeout(() => setTablePhase('collect'), TRICK_PAUSE_MS))
+      timers.push(
+        setTimeout(() => {
+          if (scoresReady) setTablePhase('round-scores')
+        }, TRICK_PAUSE_MS + COLLECT_MS),
+      )
+    } else {
+      timers.push(
+        setTimeout(() => {
+          acknowledgeTrickReveal(code)
+            .then(() => {
+              setTablePhase('playing')
+              setFrozenTrickReveal(null)
+            })
+            .catch((err) => setError(err.message))
+        }, TRICK_PAUSE_MS),
+      )
     }
 
-    const timer = setTimeout(() => {
-      acknowledgeTrickReveal(code).catch((err) => setError(err.message))
-    }, MID_TRICK_REVEAL_MS)
-    return () => clearTimeout(timer)
-  }, [code, trickReveal?.at, trickReveal?.endsRound])
+    return () => timers.forEach(clearTimeout)
+  }, [code, session?.lastTrickReveal?.at, session?.lastTrickReveal?.endsRound])
 
   useEffect(() => {
-    if (round?.status === ROUND_STATUS.CALLING && roundEndSnapshot) {
-      setRoundEndSnapshot(null)
+    if (roundComplete && scoresReady && frozenTrickReveal?.endsRound) {
+      setTablePhase('round-scores')
     }
-  }, [round?.status, roundNumber, roundEndSnapshot])
+  }, [roundComplete, scoresReady, frozenTrickReveal?.endsRound])
+
+  useEffect(() => {
+    if (round?.status === ROUND_STATUS.CALLING && roundNumber > 0) {
+      setTablePhase('dealing')
+      setFrozenTrickReveal(null)
+      const t = setTimeout(() => setTablePhase('playing'), 1200)
+      return () => clearTimeout(t)
+    }
+    return undefined
+  }, [round?.status, roundNumber])
 
   useEffect(() => {
     if (callingPhase && me?.hand?.length) {
@@ -181,7 +209,8 @@ export default function Game() {
     setError('')
     try {
       const result = await advanceToNextRound(code)
-      setRoundEndSnapshot(null)
+      setFrozenTrickReveal(null)
+      setTablePhase('dealing')
       if (result.ended) {
         navigate(`/leaderboard/${code}`)
       }
@@ -193,8 +222,10 @@ export default function Game() {
   }
 
   const turnMessage = (() => {
-    if (showRoundEnd) return null
-    if (trickReveal && !trickReveal.endsRound) return 'Trick result…'
+    if (tablePhase === 'trick-won') return 'Trick won'
+    if (tablePhase === 'collect') return 'Cards returning to deck…'
+    if (tablePhase === 'round-scores') return 'Round complete'
+    if (tablePhase === 'dealing') return 'Dealing…'
     if (callingPhase && currentTurnPlayer) {
       if (me?.call != null) return 'Waiting for other players to call…'
       if (isMyTurn) return 'Your turn — choose how many tricks you will win'
@@ -207,27 +238,13 @@ export default function Game() {
     return null
   })()
 
-  if (showRoundEnd && roundEndSnapshot) {
-    return (
-      <PageLayout title={`Round ${roundEndSnapshot.roundNumber}`}>
-        <div className="mx-auto my-auto w-full">
-          <RoundEndReveal
-            reveal={roundEndSnapshot.reveal}
-            players={players}
-            round={round}
-            roundNumber={roundEndSnapshot.roundNumber}
-            isOwner={isOwner}
-            busy={busy}
-            scoresReady={scoresReady}
-            onNextRound={handleNextRound}
-          />
-          {error ? (
-            <p className="mt-4 text-center text-sm text-red-300">{error}</p>
-          ) : null}
-        </div>
-      </PageLayout>
-    )
-  }
+  const handVisible =
+    !isSpectator &&
+    tablePhase !== 'round-scores' &&
+    tablePhase !== 'collect' &&
+    tablePhase !== 'dealing' &&
+    me?.hand?.length &&
+    (round?.status === ROUND_STATUS.PLAYING || round?.status === ROUND_STATUS.CALLING)
 
   return (
     <PageLayout title={`Round ${roundNumber} · ${cardsPerRound} card${cardsPerRound === 1 ? '' : 's'}`}>
@@ -250,8 +267,8 @@ export default function Game() {
         {isOwner && joinRequests.length > 0 ? (
           <div className="space-y-3">
             <div className="rounded-lg border border-accent/40 bg-accent/10 px-4 py-3 text-center text-sm text-accent">
-              {joinRequests.length} player{joinRequests.length === 1 ? '' : 's'} wants to join — accept here
-              without leaving the game.
+              {joinRequests.length} player{joinRequests.length === 1 ? '' : 's'} wants to join — accept or
+              reject below.
             </div>
             <JoinRequestsPanel
               joinRequests={joinRequests}
@@ -273,13 +290,24 @@ export default function Game() {
 
         <div className="grid gap-4 lg:grid-cols-12 lg:items-start">
           <div className="space-y-4 lg:col-span-8">
-            {trickReveal && !trickReveal.endsRound ? (
-              <TrickReveal reveal={trickReveal} players={players} />
-            ) : (
-              <GameTable cardsOnTable={session?.cardsOnTable} players={players} />
-            )}
+            <GameTable
+              players={players}
+              turnOrder={session?.turnOrder ?? []}
+              cardsOnTable={session?.cardsOnTable}
+              trickReveal={trickReveal}
+              tablePhase={tablePhase}
+              round={round}
+              roundNumber={roundNumber}
+              sar={sar}
+              currentTurn={session?.currentTurn}
+              currentUserId={currentUserId}
+              isOwner={isOwner}
+              busy={busy}
+              scoresReady={scoresReady}
+              onNextRound={handleNextRound}
+            />
 
-            {!isSpectator && (callingPhase || playingPhase) && me?.hand?.length ? (
+            {handVisible ? (
               <section>
                 <h2 className="mb-3 text-center text-xs uppercase tracking-wider text-muted">
                   Your Hand
@@ -292,7 +320,7 @@ export default function Game() {
                   {(me?.hand ?? []).map((card, index) => {
                     const canPlay =
                       playingPhase &&
-                      !trickReveal &&
+                      tablePhase === 'playing' &&
                       isMyTurn &&
                       playableCards.some((c) => c.id === card.id)
                     return (
@@ -311,35 +339,31 @@ export default function Game() {
           </div>
 
           <aside className="space-y-4 lg:col-span-4 lg:sticky lg:top-4">
-            <section className="rounded-xl border border-border bg-surface-raised p-4">
-              <h2 className="mb-3 text-xs uppercase tracking-wider text-muted">Live standings</h2>
-              <ul className="space-y-2">
-                {players.map((player) => (
-                  <li
-                    key={player.id}
-                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
-                      player.id === session?.currentTurn
-                        ? 'bg-accent/15 ring-1 ring-accent/40'
-                        : 'bg-surface'
-                    }`}
-                  >
-                    <span className="truncate pr-2">
-                      {player.name}
-                      {player.id === session?.currentTurn
-                        ? callingPhase
-                          ? ' • calling'
-                          : playingPhase
-                            ? ' • turn'
-                            : ''
-                        : ''}
-                    </span>
-                    <span className="text-right text-xs text-muted">
-                      {player.tricksWon ?? 0} won · {player.sessionScore ?? 0} pts
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+            {tablePhase !== 'round-scores' ? (
+              <section className="rounded-xl border border-border bg-surface-raised p-4">
+                <h2 className="mb-3 text-xs uppercase tracking-wider text-muted">This round</h2>
+                <ul className="space-y-2">
+                  {(session?.turnOrder ?? [])
+                    .map((id) => players.find((p) => p.id === id))
+                    .filter((p) => p && p.status !== 'spectator')
+                    .map((player) => (
+                      <li
+                        key={player.id}
+                        className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
+                          player.id === session?.currentTurn
+                            ? 'bg-accent/15 ring-1 ring-accent/40'
+                            : 'bg-surface'
+                        }`}
+                      >
+                        <span className="truncate pr-2">{player.name}</span>
+                        <span className="text-right text-xs text-muted">
+                          call {player.call ?? '—'} · won {player.tricksWon ?? 0}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              </section>
+            ) : null}
 
             {!isSpectator && callingPhase && me?.call == null && isMyTurn ? (
               <CallPicker
@@ -357,9 +381,11 @@ export default function Game() {
               </div>
             ) : null}
 
-            <Link to="/" className="block text-center text-sm text-muted hover:text-text">
-              Leave session
-            </Link>
+            {tablePhase !== 'round-scores' ? (
+              <Link to="/" className="block text-center text-sm text-muted hover:text-text">
+                Leave session
+              </Link>
+            ) : null}
           </aside>
         </div>
 
