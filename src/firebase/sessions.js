@@ -556,6 +556,37 @@ async function finalizeRoundScores(code, roundNumber) {
   await updateDoc(roundRef(code, roundNumber), { results })
 }
 
+export async function advanceToNextRound(code) {
+  if (!isFirebaseConfigured) throw new Error('Firebase not configured')
+
+  const userId = auth.currentUser.uid
+  const sessionSnap = await getDoc(sessionsRef(code))
+  if (!sessionSnap.exists()) throw new Error('Session not found')
+
+  const session = sessionSnap.data()
+  if (session.ownerId !== userId) {
+    throw new Error('Only the session owner can start the next round')
+  }
+
+  const roundNumber = session.currentRound
+  const roundSnap = await getDoc(roundRef(code, roundNumber))
+  if (roundSnap.data()?.status !== ROUND_STATUS.COMPLETE) {
+    throw new Error('This round is not finished yet')
+  }
+
+  const activePlayers = await getActivePlayers(code)
+  const maxRound = session.maxRound ?? getMaxRound(activePlayers.length)
+  const cycleLength = 2 * maxRound - 1
+
+  if (roundNumber >= cycleLength) {
+    await updateDoc(sessionsRef(code), { status: SESSION_STATUS.ENDED })
+    return { ended: true }
+  }
+
+  await beginRound(code, roundNumber + 1, activePlayers, session.firstDealerIndex ?? 0)
+  return { ended: false, nextRound: roundNumber + 1 }
+}
+
 export function isAcceptedPlayer(players, userId) {
   return players.some((p) => p.id === userId)
 }
