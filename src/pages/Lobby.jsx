@@ -7,6 +7,7 @@ import {
   acceptJoinRequest,
   rejectJoinRequest,
   startGame,
+  subscribeToJoinRequests,
   subscribeToPlayers,
   subscribeToSession,
 } from '../firebase/sessions.js'
@@ -18,6 +19,7 @@ export default function Lobby() {
   const { userId } = useAuth()
   const [session, setSession] = useState(null)
   const [players, setPlayers] = useState([])
+  const [joinRequests, setJoinRequests] = useState([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -27,9 +29,11 @@ export default function Lobby() {
   useEffect(() => {
     const unsubSession = subscribeToSession(code, setSession)
     const unsubPlayers = subscribeToPlayers(code, setPlayers)
+    const unsubJoin = subscribeToJoinRequests(code, setJoinRequests)
     return () => {
       unsubSession()
       unsubPlayers()
+      unsubJoin()
     }
   }, [code])
 
@@ -71,7 +75,6 @@ export default function Lobby() {
   }
 
   const activeCount = players.filter((p) => p.status !== 'spectator').length
-  const joinRequests = session?.joinRequests ?? []
   const showJoinRequests = isOwner && joinRequests.length > 0
 
   return (

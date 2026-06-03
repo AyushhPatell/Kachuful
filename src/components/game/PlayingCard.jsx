@@ -1,7 +1,14 @@
 import { motion } from 'framer-motion'
 import { SAR_INFO } from '../../constants/game.js'
 
-export default function PlayingCard({ card, faceDown = false, small = false, onClick, selected }) {
+export default function PlayingCard({
+  card,
+  faceDown = false,
+  small = false,
+  onClick,
+  selected,
+  dealDelay = 0,
+}) {
   const size = small
     ? 'h-16 w-11 text-xs sm:h-18 sm:w-12'
     : 'h-24 w-16 text-sm sm:h-28 sm:w-20 sm:text-base landscape:h-20 landscape:w-14 landscape:text-xs md:h-24 md:w-16 md:text-sm lg:h-28 lg:w-20 lg:text-base'
@@ -27,6 +34,9 @@ export default function PlayingCard({ card, faceDown = false, small = false, onC
   return (
     <motion.button
       type="button"
+      initial={{ opacity: 0, y: 24, rotate: -6 }}
+      animate={{ opacity: 1, y: 0, rotate: 0 }}
+      transition={{ delay: dealDelay, duration: 0.35 }}
       whileHover={onClick ? { y: -8 } : undefined}
       whileTap={onClick ? { scale: 0.95 } : undefined}
       onClick={onClick}

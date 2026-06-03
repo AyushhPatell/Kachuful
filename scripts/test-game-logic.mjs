@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { isCallLegal } from '../src/lib/callValidation.js'
 import {
   calculateRoundPoints,
   evaluateTrickWinner,
@@ -36,5 +37,12 @@ assert.equal(evaluateTrickWinner(trick, 'Ka').userId, 'c')
 
 assert.equal(resolveVote({ a: 'next', b: 'end' }), 'next')
 assert.equal(resolveVote({ a: 'end', b: 'end', c: 'next' }), 'end')
+
+const twoPlayers = [
+  { id: 'a', status: 'active', call: 1 },
+  { id: 'b', status: 'active', call: null },
+]
+assert.equal(isCallLegal(0, 1, twoPlayers, 'b'), false)
+assert.equal(isCallLegal(1, 1, twoPlayers, 'b'), true)
 
 console.log('All game logic checks passed.')

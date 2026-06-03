@@ -106,3 +106,32 @@ export function resolveVote(votes) {
   const nextCount = values.filter((v) => v === 'next').length
   return endCount > nextCount ? 'end' : 'next'
 }
+
+/** First player to act / deal for this round (0-based index in turnOrder). */
+export function getDealerIndexForRound(roundNumber, firstDealerIndex, playerCount) {
+  return (firstDealerIndex + roundNumber - 1) % playerCount
+}
+
+export function getNextInTurnOrder(turnOrder, currentUserId) {
+  const idx = turnOrder.indexOf(currentUserId)
+  if (idx === -1) return turnOrder[0] ?? null
+  return turnOrder[(idx + 1) % turnOrder.length]
+}
+
+/** Next player in order who still has cards in hand. */
+export function getNextPlayerWithCards(turnOrder, currentUserId, handsByPlayerId) {
+  const startIdx = turnOrder.indexOf(currentUserId)
+  if (startIdx === -1) return null
+
+  for (let step = 1; step <= turnOrder.length; step += 1) {
+    const id = turnOrder[(startIdx + step) % turnOrder.length]
+    const hand = handsByPlayerId[id] ?? []
+    if (hand.length > 0) return id
+  }
+  return null
+}
+
+/** Players still in the current trick (have at least one card). */
+export function getPlayersInTrick(turnOrder, handsByPlayerId) {
+  return turnOrder.filter((id) => (handsByPlayerId[id] ?? []).length > 0)
+}

@@ -21,18 +21,22 @@ export function shuffleDeck(deck) {
   return shuffled
 }
 
-/** Deal `cardsPerPlayer` cards to each player in join order. */
-export function dealHands(playerIds, cardsPerPlayer) {
+/** Deal order starts at dealerIndex (clockwise). */
+export function dealHands(playerIds, cardsPerPlayer, dealerIndex = 0) {
   const deck = shuffleDeck(createDeck())
   const needed = playerIds.length * cardsPerPlayer
   if (needed > deck.length) {
     throw new Error(`Cannot deal ${cardsPerPlayer} cards to ${playerIds.length} players`)
   }
 
+  const order = [
+    ...playerIds.slice(dealerIndex),
+    ...playerIds.slice(0, dealerIndex),
+  ]
   const hands = Object.fromEntries(playerIds.map((id) => [id, []]))
   let index = 0
   for (let round = 0; round < cardsPerPlayer; round += 1) {
-    for (const playerId of playerIds) {
+    for (const playerId of order) {
       hands[playerId].push(deck[index])
       index += 1
     }
