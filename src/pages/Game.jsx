@@ -4,10 +4,17 @@ import PageLayout from '../components/layout/PageLayout.jsx'
 import CallPicker from '../components/game/CallPicker.jsx'
 import GameTable from '../components/game/GameTable.jsx'
 import PlayingCard, { SarBadge } from '../components/game/PlayingCard.jsx'
+import RoundSummary from '../components/game/RoundSummary.jsx'
+import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useJoinRequests } from '../hooks/useJoinRequests.js'
 import {
+  acceptJoinRequest,
+  hasPendingJoinRequest,
   playCard,
+  rejectJoinRequest,
   submitCall,
+  subscribeToMyJoinRequest,
   subscribeToPlayers,
   subscribeToRound,
   subscribeToSession,
@@ -26,12 +33,19 @@ export default function Game() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [dealAnimation, setDealAnimation] = useState(false)
+  const [newRequestPing, setNewRequestPing] = useState(false)
+  const [pendingFromSubcollection, setPendingFromSubcollection] = useState(false)
+
+  const isOwner = session?.ownerId === currentUserId
+  const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
 
   const me = players.find((p) => p.id === currentUserId)
+  const pendingJoin =
+    hasPendingJoinRequest(session, currentUserId) || pendingFromSubcollection
   const roundNumber = session?.currentRound ?? 0
   const cardsPerRound = session ? getCardsPerRound(roundNumber, session.maxRound) : 0
   const isMyTurn = session?.currentTurn === currentUserId
-  const isSpectator = me?.status === 'spectator'
+  const isSpectator = me?.status === 'spectator' || (pendingJoin && !me)
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
 
   const callingPhase = round?.status === ROUND_STATUS.CALLING
@@ -51,6 +65,36 @@ export default function Game() {
       unsubPlayers()
     }
   }, [code])
+
+  useEffect(() => {
+    if (!currentUserId || me) return undefined
+    return subscribeToMyJoinRequest(code, currentUserId, setPendingFromSubcollection)
+  }, [code, currentUserId, me])
+
+  useEffect(() => {
+    if (!isOwner || !session?.joinEventAt) return undefined
+    setNewRequestPing(true)
+    const timer = setTimeout(() => setNewRequestPing(false), 2500)
+    return () => clearTimeout(timer)
+  }, [isOwner, session?.joinEventAt, joinRequests.length])
+
+  async function handleAcceptJoin(request) {
+    setError('')
+    try {
+      await acceptJoinRequest(code, request)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function handleRejectJoin(requestUserId) {
+    setError('')
+    try {
+      await rejectJoinRequest(code, requestUserId)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   useEffect(() => {
     if (!roundNumber) return undefined
@@ -92,7 +136,7 @@ export default function Game() {
   }
 
   const turnMessage = (() => {
-    if (roundComplete) return 'Round complete — scores updated'
+    if (roundComplete) return 'Round complete'
     if (callingPhase && currentTurnPlayer) {
       if (me?.call != null) return 'Waiting for other players to call…'
       if (isMyTurn) return 'Your turn — choose how many tricks you will win'
@@ -104,6 +148,19 @@ export default function Game() {
     }
     return null
   })()
+
+  if (roundComplete) {
+    return (
+      <PageLayout title={`Round ${roundNumber} summary`}>
+        <div className="mx-auto my-auto w-full max-w-lg space-y-4">
+          <RoundSummary roundNumber={roundNumber} players={players} round={round} />
+          <Link to="/" className="block text-center text-sm text-muted hover:text-text">
+            Leave session
+          </Link>
+        </div>
+      </PageLayout>
+    )
+  }
 
   return (
     <PageLayout title={`Round ${roundNumber} · ${cardsPerRound} card${cardsPerRound === 1 ? '' : 's'}`}>
@@ -123,9 +180,27 @@ export default function Game() {
           ) : null}
         </div>
 
+        {isOwner && joinRequests.length > 0 ? (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-accent/40 bg-accent/10 px-4 py-3 text-center text-sm text-accent">
+              {joinRequests.length} player{joinRequests.length === 1 ? '' : 's'} wants to join — accept here
+              without leaving the game.
+            </div>
+            <JoinRequestsPanel
+              joinRequests={joinRequests}
+              newRequestPing={newRequestPing}
+              onAccept={handleAcceptJoin}
+              onReject={handleRejectJoin}
+              compact
+            />
+          </div>
+        ) : null}
+
         {isSpectator ? (
           <div className="rounded-xl border border-border bg-surface-raised px-4 py-3 text-center text-sm text-muted">
-            Spectator mode — you will join as a player from the next round.
+            {pendingJoin && !me
+              ? 'Watching as guest — ask the host to accept you to play the next round.'
+              : 'Spectator mode — you will join as a player from the next round.'}
           </div>
         ) : null}
 
@@ -161,17 +236,11 @@ export default function Game() {
                 </div>
               </section>
             ) : null}
-
-            {roundComplete ? (
-              <div className="rounded-xl border border-border bg-surface-raised p-4 text-center text-sm text-muted">
-                Round finished. Voting and next round flow coming soon.
-              </div>
-            ) : null}
           </div>
 
           <aside className="space-y-4 lg:col-span-4 lg:sticky lg:top-4">
             <section className="rounded-xl border border-border bg-surface-raised p-4">
-              <h2 className="mb-3 text-xs uppercase tracking-wider text-muted">Standings</h2>
+              <h2 className="mb-3 text-xs uppercase tracking-wider text-muted">Live standings</h2>
               <ul className="space-y-2">
                 {players.map((player) => (
                   <li
@@ -193,8 +262,7 @@ export default function Game() {
                         : ''}
                     </span>
                     <span className="text-right text-xs text-muted">
-                      call {player.call ?? '…'} · won {player.tricksWon ?? 0} · {player.sessionScore}{' '}
-                      pts
+                      {player.sessionScore ?? 0} pts
                     </span>
                   </li>
                 ))}
@@ -222,6 +290,12 @@ export default function Game() {
             </Link>
           </aside>
         </div>
+
+        {listenError ? (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Join requests may not update live — publish Firestore rules for joinRequests, then reload.
+          </div>
+        ) : null}
 
         {error ? (
           <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">

@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import PageLayout from '../components/layout/PageLayout.jsx'
+import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
 import Button from '../components/ui/Button.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useJoinRequests } from '../hooks/useJoinRequests.js'
 import {
   acceptJoinRequest,
+  hasPendingJoinRequest,
+  isAcceptedPlayer,
   rejectJoinRequest,
   startGame,
-  parseJoinRequests,
+  subscribeToMyJoinRequest,
   subscribeToPlayers,
   subscribeToSession,
 } from '../firebase/sessions.js'
-import { MIN_PLAYERS } from '../constants/game.js'
+import { MAX_PLAYERS, MIN_PLAYERS } from '../constants/game.js'
 
 export default function Lobby() {
   const { code } = useParams()
@@ -22,9 +26,11 @@ export default function Lobby() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [newRequestPing, setNewRequestPing] = useState(false)
+  const [pendingFromSubcollection, setPendingFromSubcollection] = useState(false)
 
   const currentUserId = userId
   const isOwner = session?.ownerId === currentUserId
+  const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
 
   useEffect(() => {
     const unsubSession = subscribeToSession(code, setSession)
@@ -35,17 +41,23 @@ export default function Lobby() {
     }
   }, [code])
 
+  const isPlayer = isAcceptedPlayer(players, currentUserId)
+  const pendingJoin =
+    hasPendingJoinRequest(session, currentUserId) || pendingFromSubcollection
+
   useEffect(() => {
-    if (session?.status === 'active') {
+    if (!currentUserId || isPlayer) return undefined
+    return subscribeToMyJoinRequest(code, currentUserId, setPendingFromSubcollection)
+  }, [code, currentUserId, isPlayer])
+
+  useEffect(() => {
+    if (session?.status === 'active' && (isPlayer || pendingJoin)) {
       navigate(`/game/${code}`)
     }
-    if (session?.status === 'ended') {
+    if (session?.status === 'ended' && isPlayer) {
       navigate(`/leaderboard/${code}`)
     }
-  }, [session?.status, code, navigate])
-
-  const joinRequests = parseJoinRequests(session)
-  const showJoinRequests = isOwner && joinRequests.length > 0
+  }, [session?.status, isPlayer, pendingJoin, code, navigate])
 
   useEffect(() => {
     if (!isOwner || !session?.joinEventAt) return undefined
@@ -83,9 +95,7 @@ export default function Lobby() {
   }
 
   const activeCount = players.filter((p) => p.status !== 'spectator').length
-  const hasPendingRequest =
-    session?.joinRequestsByUser?.[currentUserId] ||
-    (session?.joinRequests ?? []).some((r) => r.userId === currentUserId)
+  const totalInSession = players.length
 
   return (
     <PageLayout title="Lobby">
@@ -104,11 +114,19 @@ export default function Lobby() {
           </button>
         </div>
 
-        <div className={`grid gap-4 ${showJoinRequests ? 'md:grid-cols-2' : ''}`}>
+        {isOwner && joinRequests.length > 0 ? (
+          <div className="rounded-lg border border-accent/40 bg-accent/10 px-4 py-3 text-center text-sm text-accent">
+            {joinRequests.length} player{joinRequests.length === 1 ? '' : 's'} waiting to join — accept or
+            reject below.
+          </div>
+        ) : null}
+
+        <div className={`grid gap-4 ${isOwner ? 'md:grid-cols-2' : ''}`}>
           <section className="rounded-xl border border-border bg-surface-raised p-4">
-            <h2 className="mb-3 text-sm font-medium text-muted">
-              Players ({activeCount}/{MIN_PLAYERS}+)
-            </h2>
+            <h2 className="mb-1 text-sm font-medium text-muted">Players in session</h2>
+            <p className="mb-3 text-xs text-muted">
+              {activeCount} playing · {totalInSession}/{MAX_PLAYERS} in room · need {MIN_PLAYERS} to start
+            </p>
             <ul className="space-y-2">
               {players.map((player) => (
                 <li key={player.id} className="flex items-center justify-between rounded-lg bg-surface px-4 py-3">
@@ -126,44 +144,27 @@ export default function Lobby() {
             </ul>
           </section>
 
-          {showJoinRequests ? (
-            <section
-              className={`rounded-xl border bg-surface-raised p-4 transition ${
-                newRequestPing ? 'border-accent ring-1 ring-accent/40' : 'border-border'
-              }`}
-            >
-              <h2 className="mb-3 text-sm font-medium text-muted">
-                Join requests ({joinRequests.length})
-              </h2>
-              <ul className="space-y-2">
-                {joinRequests.map((request) => (
-                  <li
-                    key={request.userId}
-                    className="flex flex-col gap-3 rounded-lg bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <span className="truncate">{request.name}</span>
-                    <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex">
-                      <Button className="min-h-11 px-3 py-2 text-xs" onClick={() => handleAccept(request)}>
-                        Accept
-                      </Button>
-                      <Button
-                        variant="danger"
-                        className="min-h-11 px-3 py-2 text-xs"
-                        onClick={() => handleReject(request.userId)}
-                      >
-                        Reject
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
+          {isOwner ? (
+            <JoinRequestsPanel
+              joinRequests={joinRequests}
+              newRequestPing={newRequestPing}
+              onAccept={handleAccept}
+              onReject={handleReject}
+            />
           ) : null}
         </div>
 
-        {!isOwner && hasPendingRequest ? (
+        {!isOwner && pendingJoin && session?.status === 'lobby' ? (
           <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
             Waiting for the session owner to accept your request…
+          </div>
+        ) : null}
+
+        {listenError ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Join requests may not update live. Publish Firestore rules for{' '}
+            <code className="text-xs">sessions/&#123;code&#125;/joinRequests</code> in Firebase
+            Console, then reload.
           </div>
         ) : null}
 

@@ -109,6 +109,7 @@ This repo includes `.github/workflows/deploy-firebase-hosting.yml`.
    - Firebase Console -> Firestore -> Rules
    - Paste contents of `firestore.rules` from this repo
    - Click **Publish**
+   - Join requests use `sessions/{code}/joinRequests/{userId}` — if this path is not allowed, the host may only see the **first** joiner (legacy session field) and not later requests.
 4. Push to `main` and the workflow deploys the web app automatically.
 
 If CI shows a Firestore rules step warning (`403` on `firestore.googleapis.com`), hosting still deploys. Rules can stay manual unless you grant the service account **Firebase Admin** (or Editor) in Google Cloud IAM.

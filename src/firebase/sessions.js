@@ -1,5 +1,7 @@
 import {
+  arrayUnion,
   collection,
+  deleteDoc,
   deleteField,
   doc,
   getDoc,
@@ -43,6 +45,14 @@ function playerRef(code, userId) {
 
 function roundRef(code, roundNumber) {
   return doc(db, 'sessions', code, 'rounds', String(roundNumber))
+}
+
+function joinRequestsCollection(code) {
+  return collection(db, 'sessions', code, 'joinRequests')
+}
+
+function joinRequestRef(code, userId) {
+  return doc(db, 'sessions', code, 'joinRequests', userId)
 }
 
 async function generateUniqueCode() {
@@ -153,6 +163,40 @@ export async function createSession(displayName) {
   return code
 }
 
+function mapJoinRequestDoc(userId, data) {
+  return {
+    userId,
+    name: data.name,
+    requestedAt: data.requestedAt ?? 0,
+  }
+}
+
+/** Load all pending join requests (source of truth: subcollection). */
+export async function fetchJoinRequests(code) {
+  if (!isFirebaseConfigured) return []
+
+  const snap = await getDocs(joinRequestsCollection(code))
+  return snap.docs.map((d) => mapJoinRequestDoc(d.id, d.data()))
+}
+
+async function writeJoinRequest(code, userId, displayName, requestedAt) {
+  const payload = { name: displayName, requestedAt, userId }
+
+  // Primary store — one doc per joiner; collection listener shows every request.
+  await setDoc(joinRequestRef(code, userId), payload, { merge: true })
+
+  // Mirror on session doc for older builds + owner ping (non-blocking).
+  try {
+    await updateDoc(sessionsRef(code), {
+      joinEventAt: requestedAt,
+      [`joinRequestsByUser.${userId}`]: { name: displayName, requestedAt },
+      joinRequests: arrayUnion({ userId, name: displayName, requestedAt }),
+    })
+  } catch (err) {
+    console.warn('Session join metadata update failed:', err)
+  }
+}
+
 export async function requestJoinSession(code, displayName) {
   if (!isFirebaseConfigured) throw new Error('Firebase not configured')
 
@@ -175,24 +219,29 @@ export async function requestJoinSession(code, displayName) {
     throw new Error('Session is full (max 7 players)')
   }
 
-  if (session.joinRequestsByUser?.[userId]) {
-    return { pending: true }
-  }
+  const requestedAt = Date.now()
+  const alreadyPending =
+    (await getDoc(joinRequestRef(code, userId))).exists() ||
+    Boolean(session.joinRequestsByUser?.[userId]) ||
+    (session.joinRequests ?? []).some((r) => r.userId === userId)
 
-  const legacyRequest = (session.joinRequests ?? []).find((r) => r.userId === userId)
-  if (legacyRequest) {
-    return { pending: true }
-  }
+  await writeJoinRequest(code, userId, displayName, requestedAt)
+
+  return { pending: true, alreadyPending }
+}
+
+async function clearJoinRequestFromSession(code, userId) {
+  const sessionSnap = await getDoc(sessionsRef(code))
+  if (!sessionSnap.exists()) return
+
+  const session = sessionSnap.data()
+  const cleanedArray = (session.joinRequests ?? []).filter((r) => r.userId !== userId)
 
   await updateDoc(sessionsRef(code), {
-    [`joinRequestsByUser.${userId}`]: {
-      name: displayName,
-      requestedAt: Date.now(),
-    },
+    joinRequests: cleanedArray,
+    [`joinRequestsByUser.${userId}`]: deleteField(),
     joinEventAt: Date.now(),
   })
-
-  return { pending: true }
 }
 
 export async function acceptJoinRequest(code, request) {
@@ -215,36 +264,81 @@ export async function acceptJoinRequest(code, request) {
     joinOrder,
   })
 
-  await updateDoc(sessionsRef(code), {
-    [`joinRequestsByUser.${request.userId}`]: deleteField(),
-    joinEventAt: Date.now(),
-  })
+  await deleteDoc(joinRequestRef(code, request.userId))
+  await clearJoinRequestFromSession(code, request.userId)
 }
 
 export async function rejectJoinRequest(code, userId) {
-  await updateDoc(sessionsRef(code), {
-    [`joinRequestsByUser.${userId}`]: deleteField(),
-    joinEventAt: Date.now(),
-  })
+  try {
+    await deleteDoc(joinRequestRef(code, userId))
+  } catch {
+    // doc may only exist on session map from older clients
+  }
+  await clearJoinRequestFromSession(code, userId)
+}
+
+export function mergeJoinRequestLists(...lists) {
+  const byId = new Map()
+
+  for (const list of lists) {
+    for (const request of list ?? []) {
+      if (!request?.userId || !request?.name) continue
+      const requestedAt = request.requestedAt ?? 0
+      const existing = byId.get(request.userId)
+      if (!existing || requestedAt >= existing.requestedAt) {
+        byId.set(request.userId, {
+          userId: request.userId,
+          name: request.name,
+          requestedAt,
+        })
+      }
+    }
+  }
+
+  return [...byId.values()].sort((a, b) => a.requestedAt - b.requestedAt)
 }
 
 export function parseJoinRequests(session) {
   if (!session) return []
 
-  const fromMap = session.joinRequestsByUser
-  if (fromMap && typeof fromMap === 'object') {
-    return Object.entries(fromMap)
-      .map(([id, data]) => ({
-        userId: id,
-        name: data.name,
-        requestedAt: data.requestedAt ?? 0,
-      }))
-      .sort((a, b) => a.requestedAt - b.requestedAt)
+  const fromMap = []
+  const map = session.joinRequestsByUser
+  if (map && typeof map === 'object') {
+    for (const [id, data] of Object.entries(map)) {
+      if (data?.name) {
+        fromMap.push({
+          userId: id,
+          name: data.name,
+          requestedAt: data.requestedAt ?? 0,
+        })
+      }
+    }
   }
 
-  return [...(session.joinRequests ?? [])].sort(
-    (a, b) => (a.requestedAt ?? 0) - (b.requestedAt ?? 0),
+  return mergeJoinRequestLists(fromMap, session.joinRequests ?? [])
+}
+
+export function subscribeToJoinRequests(code, onChange, onError) {
+  if (!isFirebaseConfigured) return () => {}
+
+  return onSnapshot(
+    joinRequestsCollection(code),
+    (snap) => {
+      onChange(snap.docs.map((d) => mapJoinRequestDoc(d.id, d.data())))
+    },
+    (error) => {
+      console.error('Join requests listener error:', error)
+      onError?.(error)
+    },
   )
+}
+
+export function subscribeToMyJoinRequest(code, userId, onChange) {
+  if (!isFirebaseConfigured || !userId) return () => {}
+
+  return onSnapshot(joinRequestRef(code, userId), (snap) => {
+    onChange(snap.exists())
+  })
 }
 
 export async function startGame(code) {
@@ -416,26 +510,38 @@ export async function playCard(code, userId, card) {
 
 async function finalizeRoundScores(code, roundNumber) {
   const activePlayers = await getActivePlayers(code)
-  const updates = activePlayers.map(async (p) => {
-    const snap = await getDoc(playerRef(code, p.id))
-    const data = snap.data()
-    const points = calculateRoundPoints(data.call ?? 0, data.tricksWon ?? 0)
-    const sessionScore = (data.sessionScore ?? 0) + points
-    const roundsFailed = (data.roundsFailed ?? 0) + (points === 0 ? 1 : 0)
+  const results = {}
 
-    await updateDoc(playerRef(code, p.id), { sessionScore, roundsFailed })
+  await Promise.all(
+    activePlayers.map(async (p) => {
+      const snap = await getDoc(playerRef(code, p.id))
+      const data = snap.data()
+      const points = calculateRoundPoints(data.call ?? 0, data.tricksWon ?? 0)
 
-    const roundSnap = await getDoc(roundRef(code, roundNumber))
-    const results = roundSnap.data()?.results ?? {}
-    results[p.id] = {
-      call: data.call,
-      won: data.tricksWon,
-      points,
-    }
-    await updateDoc(roundRef(code, roundNumber), { results })
-  })
+      results[p.id] = {
+        call: data.call ?? 0,
+        won: data.tricksWon ?? 0,
+        points,
+      }
 
-  await Promise.all(updates)
+      await updateDoc(playerRef(code, p.id), {
+        sessionScore: (data.sessionScore ?? 0) + points,
+        roundsFailed: (data.roundsFailed ?? 0) + (points === 0 ? 1 : 0),
+      })
+    }),
+  )
+
+  await updateDoc(roundRef(code, roundNumber), { results })
+}
+
+export function isAcceptedPlayer(players, userId) {
+  return players.some((p) => p.id === userId)
+}
+
+export function hasPendingJoinRequest(session, userId) {
+  if (!session || !userId) return false
+  if (session.joinRequestsByUser?.[userId]) return true
+  return (session.joinRequests ?? []).some((r) => r.userId === userId)
 }
 
 export function subscribeToSession(code, onChange) {
