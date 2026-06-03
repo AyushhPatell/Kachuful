@@ -24,8 +24,16 @@ assert.equal(getSarForRound(2), 'Chu')
 assert.equal(getSarForRound(5), 'Ka')
 
 assert.equal(calculateRoundPoints(0, 0), 10)
-assert.equal(calculateRoundPoints(1, 1), 20)
-assert.equal(calculateRoundPoints(4, 4), 50)
+assert.equal(calculateRoundPoints(1, 1), 11)
+assert.equal(calculateRoundPoints(4, 4), 40)
+assert.equal(calculateRoundPoints(2, 2), 20)
+assert.equal(getSarForRound(0), 'Ka')
+
+const harshilTrumpWins = [
+  { userId: 'ayush', card: { suit: 'hearts', rank: 'Q', id: 'Q-hearts' } },
+  { userId: 'harshil', card: { suit: 'clubs', rank: '7', id: '7-clubs' } },
+]
+assert.equal(evaluateTrickWinner(harshilTrumpWins, 'Ka').userId, 'harshil')
 assert.equal(calculateRoundPoints(3, 2), 0)
 assert.equal(calculateRoundPoints(2, 3), 0)
 

@@ -23,9 +23,10 @@ export function getRoundDirection(sessionRoundNumber, maxRound) {
   return posInCycle <= maxRound ? 'up' : 'down'
 }
 
-/** Sar for session round (1-indexed). */
+/** Sar for session round (1-indexed). Round 0 / invalid → treat as round 1. */
 export function getSarForRound(sessionRoundNumber) {
-  return SAR_SEQUENCE[(sessionRoundNumber - 1) % SAR_SEQUENCE.length]
+  const n = Math.max(1, Math.floor(Number(sessionRoundNumber)) || 1)
+  return SAR_SEQUENCE[(n - 1) % SAR_SEQUENCE.length]
 }
 
 export function getSarSuit(sar) {
@@ -38,9 +39,12 @@ export function resolveTrumpSuit(sar) {
   return SAR_INFO[sar]?.suit ?? null
 }
 
-/** Prefer session + round fields; fall back to round index. */
+/** Prefer session + round fields; fall back to round index (never use 0). */
 export function resolveSarForRound(session, round) {
-  const roundNumber = session?.currentRound ?? round?.roundNumber ?? 1
+  const roundNumber = Math.max(
+    1,
+    Math.floor(Number(session?.currentRound ?? round?.roundNumber ?? 1)) || 1,
+  )
   const fromDoc = session?.currentSar ?? round?.sar
   if (fromDoc && SAR_INFO[fromDoc]) return fromDoc
   return getSarForRound(roundNumber)
@@ -52,10 +56,14 @@ export function isTrumpCard(card, sar) {
   return card.suit === trumpSuit
 }
 
+/**
+ * Spec examples: 0/0 → 10; called 1 won 1 → 11; called 4 won 4 → 40.
+ * Exact match only; over/under call → 0.
+ */
 export function calculateRoundPoints(call, tricksWon) {
-  if (call === 0 && tricksWon === 0) return 10
-  if (call > 0 && call === tricksWon) return call * 10 + 10
-  return 0
+  if (call !== tricksWon) return 0
+  if (call === 0) return 10
+  return call * 10 + (call === 1 ? 1 : 0)
 }
 
 /**
@@ -89,11 +97,21 @@ export function evaluateTrickWinner(cardsOnTable, sar) {
 
   if (!pool.length) return cardsOnTable[0]
 
-  return pool.reduce((best, current) => {
+  const winner = pool.reduce((best, current) => {
     const bestVal = RANK_VALUES[best.card.rank] ?? 0
     const currentVal = RANK_VALUES[current.card.rank] ?? 0
     return currentVal > bestVal ? current : best
   })
+
+  if (trumpPlays.length > 0 && !trumpPlays.some((p) => p.userId === winner.userId)) {
+    return trumpPlays.reduce((best, current) => {
+      const bestVal = RANK_VALUES[best.card.rank] ?? 0
+      const currentVal = RANK_VALUES[current.card.rank] ?? 0
+      return currentVal > bestVal ? current : best
+    })
+  }
+
+  return winner
 }
 
 /** Rank players for final leaderboard; fewer failed rounds wins ties. */

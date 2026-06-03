@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import PageLayout from '../components/layout/PageLayout.jsx'
 import CallPicker from '../components/game/CallPicker.jsx'
 import GameTable from '../components/game/GameTable.jsx'
 import PlayingCard, { SarBadge } from '../components/game/PlayingCard.jsx'
-import RoundSummary from '../components/game/RoundSummary.jsx'
+import RoundEndReveal from '../components/game/RoundEndReveal.jsx'
 import TrickReveal from '../components/game/TrickReveal.jsx'
 import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -12,6 +12,7 @@ import { useJoinRequests } from '../hooks/useJoinRequests.js'
 import {
   acceptJoinRequest,
   acknowledgeTrickReveal,
+  advanceToNextRound,
   hasPendingJoinRequest,
   playCard,
   rejectJoinRequest,
@@ -24,8 +25,11 @@ import {
 import { getCardsPerRound, getPlayableCards } from '../lib/gameLogic.js'
 import { ROUND_STATUS } from '../constants/game.js'
 
+const MID_TRICK_REVEAL_MS = 3000
+
 export default function Game() {
   const { code } = useParams()
+  const navigate = useNavigate()
   const { userId } = useAuth()
   const currentUserId = userId
 
@@ -37,6 +41,7 @@ export default function Game() {
   const [dealAnimation, setDealAnimation] = useState(false)
   const [newRequestPing, setNewRequestPing] = useState(false)
   const [pendingFromSubcollection, setPendingFromSubcollection] = useState(false)
+  const [roundEndSnapshot, setRoundEndSnapshot] = useState(null)
 
   const isOwner = session?.ownerId === currentUserId
   const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
@@ -51,12 +56,12 @@ export default function Game() {
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
 
   const trickReveal = session?.lastTrickReveal
+  const isFinalTrickReveal = Boolean(trickReveal?.endsRound)
   const callingPhase = round?.status === ROUND_STATUS.CALLING && !trickReveal
   const playingPhase = round?.status === ROUND_STATUS.PLAYING && !trickReveal
   const roundComplete = round?.status === ROUND_STATUS.COMPLETE
-  const showRoundSummary = roundComplete && !trickReveal
-
-  const TRICK_REVEAL_MS = 3500
+  const scoresReady = Boolean(round?.results && Object.keys(round.results).length > 0)
+  const showRoundEnd = Boolean(roundEndSnapshot && (isFinalTrickReveal || roundComplete))
 
   const playableCards = useMemo(() => {
     if (!me?.hand || !playingPhase) return []
@@ -84,6 +89,50 @@ export default function Game() {
     return () => clearTimeout(timer)
   }, [isOwner, session?.joinEventAt, joinRequests.length])
 
+  useEffect(() => {
+    if (!roundNumber) return undefined
+    return subscribeToRound(code, roundNumber, setRound)
+  }, [code, roundNumber])
+
+  useEffect(() => {
+    if (!trickReveal?.endsRound || !trickReveal.at) return
+    setRoundEndSnapshot({
+      reveal: trickReveal,
+      roundNumber: session?.currentRound ?? roundNumber,
+    })
+  }, [trickReveal, session?.currentRound, roundNumber])
+
+  useEffect(() => {
+    if (!trickReveal?.at) return undefined
+
+    if (trickReveal.endsRound) {
+      const timer = setTimeout(() => {
+        acknowledgeTrickReveal(code).catch((err) => setError(err.message))
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+
+    const timer = setTimeout(() => {
+      acknowledgeTrickReveal(code).catch((err) => setError(err.message))
+    }, MID_TRICK_REVEAL_MS)
+    return () => clearTimeout(timer)
+  }, [code, trickReveal?.at, trickReveal?.endsRound])
+
+  useEffect(() => {
+    if (round?.status === ROUND_STATUS.CALLING && roundEndSnapshot) {
+      setRoundEndSnapshot(null)
+    }
+  }, [round?.status, roundNumber, roundEndSnapshot])
+
+  useEffect(() => {
+    if (callingPhase && me?.hand?.length) {
+      setDealAnimation(true)
+      const t = setTimeout(() => setDealAnimation(false), 900)
+      return () => clearTimeout(t)
+    }
+    return undefined
+  }, [callingPhase, roundNumber, me?.hand?.length])
+
   async function handleAcceptJoin(request) {
     setError('')
     try {
@@ -101,32 +150,6 @@ export default function Game() {
       setError(err.message)
     }
   }
-
-  useEffect(() => {
-    if (!roundNumber) return undefined
-    return subscribeToRound(code, roundNumber, setRound)
-  }, [code, roundNumber])
-
-  useEffect(() => {
-    if (!trickReveal?.at) return undefined
-
-    const timer = setTimeout(() => {
-      acknowledgeTrickReveal(code).catch((err) => {
-        setError(err.message)
-      })
-    }, TRICK_REVEAL_MS)
-
-    return () => clearTimeout(timer)
-  }, [code, trickReveal?.at])
-
-  useEffect(() => {
-    if (callingPhase && me?.hand?.length) {
-      setDealAnimation(true)
-      const t = setTimeout(() => setDealAnimation(false), 900)
-      return () => clearTimeout(t)
-    }
-    return undefined
-  }, [callingPhase, roundNumber, me?.hand?.length])
 
   async function handleSubmitCall(call) {
     setBusy(true)
@@ -153,9 +176,25 @@ export default function Game() {
     }
   }
 
+  async function handleNextRound() {
+    setBusy(true)
+    setError('')
+    try {
+      const result = await advanceToNextRound(code)
+      setRoundEndSnapshot(null)
+      if (result.ended) {
+        navigate(`/leaderboard/${code}`)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const turnMessage = (() => {
-    if (trickReveal) return 'Showing trick result…'
-    if (showRoundSummary) return 'Round complete'
+    if (showRoundEnd) return null
+    if (trickReveal && !trickReveal.endsRound) return 'Trick result…'
     if (callingPhase && currentTurnPlayer) {
       if (me?.call != null) return 'Waiting for other players to call…'
       if (isMyTurn) return 'Your turn — choose how many tricks you will win'
@@ -168,14 +207,23 @@ export default function Game() {
     return null
   })()
 
-  if (showRoundSummary) {
+  if (showRoundEnd && roundEndSnapshot) {
     return (
-      <PageLayout title={`Round ${roundNumber} summary`}>
-        <div className="mx-auto my-auto w-full max-w-lg space-y-4">
-          <RoundSummary roundNumber={roundNumber} players={players} round={round} />
-          <Link to="/" className="block text-center text-sm text-muted hover:text-text">
-            Leave session
-          </Link>
+      <PageLayout title={`Round ${roundEndSnapshot.roundNumber}`}>
+        <div className="mx-auto my-auto w-full">
+          <RoundEndReveal
+            reveal={roundEndSnapshot.reveal}
+            players={players}
+            round={round}
+            roundNumber={roundEndSnapshot.roundNumber}
+            isOwner={isOwner}
+            busy={busy}
+            scoresReady={scoresReady}
+            onNextRound={handleNextRound}
+          />
+          {error ? (
+            <p className="mt-4 text-center text-sm text-red-300">{error}</p>
+          ) : null}
         </div>
       </PageLayout>
     )
@@ -225,7 +273,7 @@ export default function Game() {
 
         <div className="grid gap-4 lg:grid-cols-12 lg:items-start">
           <div className="space-y-4 lg:col-span-8">
-            {trickReveal ? (
+            {trickReveal && !trickReveal.endsRound ? (
               <TrickReveal reveal={trickReveal} players={players} />
             ) : (
               <GameTable cardsOnTable={session?.cardsOnTable} players={players} />
