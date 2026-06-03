@@ -1,6 +1,6 @@
 import {
+  arrayUnion,
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -43,14 +43,6 @@ function playerRef(code, userId) {
 
 function roundRef(code, roundNumber) {
   return doc(db, 'sessions', code, 'rounds', String(roundNumber))
-}
-
-function joinRequestsCollection(code) {
-  return collection(db, 'sessions', code, 'joinRequests')
-}
-
-function joinRequestRef(code, userId) {
-  return doc(db, 'sessions', code, 'joinRequests', userId)
 }
 
 async function generateUniqueCode() {
@@ -182,13 +174,19 @@ export async function requestJoinSession(code, displayName) {
     throw new Error('Session is full (max 7 players)')
   }
 
-  await setDoc(joinRequestRef(code, userId), {
-    userId,
-    name: displayName,
-    requestedAt: Date.now(),
-  })
+  const existingRequest = (session.joinRequests ?? []).find((r) => r.userId === userId)
+  if (existingRequest) {
+    return { pending: true }
+  }
 
-  await updateDoc(sessionsRef(code), { joinEventAt: Date.now() })
+  await updateDoc(sessionsRef(code), {
+    joinRequests: arrayUnion({
+      userId,
+      name: displayName,
+      requestedAt: Date.now(),
+    }),
+    joinEventAt: Date.now(),
+  })
 
   return { pending: true }
 }
@@ -213,13 +211,21 @@ export async function acceptJoinRequest(code, request) {
     joinOrder,
   })
 
-  await deleteDoc(joinRequestRef(code, request.userId))
-  await updateDoc(sessionsRef(code), { joinEventAt: Date.now() })
+  const filtered = (session.joinRequests ?? []).filter((r) => r.userId !== request.userId)
+  await updateDoc(sessionsRef(code), {
+    joinRequests: filtered,
+    joinEventAt: Date.now(),
+  })
 }
 
 export async function rejectJoinRequest(code, userId) {
-  await deleteDoc(joinRequestRef(code, userId))
-  await updateDoc(sessionsRef(code), { joinEventAt: Date.now() })
+  const sessionSnap = await getDoc(sessionsRef(code))
+  const session = sessionSnap.data()
+  const filtered = (session.joinRequests ?? []).filter((r) => r.userId !== userId)
+  await updateDoc(sessionsRef(code), {
+    joinRequests: filtered,
+    joinEventAt: Date.now(),
+  })
 }
 
 export async function startGame(code) {
@@ -405,15 +411,6 @@ export function subscribeToPlayers(code, onChange) {
   if (!isFirebaseConfigured) return () => {}
 
   const q = query(playersCollection(code), orderBy('joinOrder'))
-  return onSnapshot(q, (snap) => {
-    onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-  })
-}
-
-export function subscribeToJoinRequests(code, onChange) {
-  if (!isFirebaseConfigured) return () => {}
-
-  const q = query(joinRequestsCollection(code), orderBy('requestedAt'))
   return onSnapshot(q, (snap) => {
     onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
   })

@@ -34,5 +34,8 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
+      - name: Deploy Firestore rules
+        run: npx firebase-tools deploy --only firestore:rules --project kachuful-70077 --non-interactive
+
       - name: Deploy to Firebase Hosting (live)
         run: npx firebase-tools deploy --only hosting --project kachuful-70077 --non-interactive

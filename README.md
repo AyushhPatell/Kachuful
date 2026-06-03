@@ -105,4 +105,6 @@ This repo includes `.github/workflows/deploy-firebase-hosting.yml`.
    - Settings -> Secrets and variables -> Actions -> New repository secret
    - Name: `FIREBASE_SERVICE_ACCOUNT`
    - Value: paste the full JSON key content
-3. Push to `main` and the workflow will deploy automatically.
+3. Push to `main` and the workflow will deploy automatically (hosting + Firestore rules).
+
+If join fails with **Missing or insufficient permissions**, open Firebase Console → Firestore → Rules, paste `firestore.rules`, and click **Publish** (or push to `main` so CI deploys rules).
