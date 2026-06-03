@@ -20,11 +20,13 @@ import {
   subscribeToRound,
   subscribeToSession,
 } from '../firebase/sessions.js'
+import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
 import { getCardsPerRound, getPlayableCards, resolveSarForRound } from '../lib/gameLogic.js'
 import { ROUND_STATUS } from '../constants/game.js'
 
-const TRICK_PAUSE_MS = 1400
-const COLLECT_MS = 900
+const TRICK_PAUSE_MS = 1200
+const COLLECT_MS = 700
+const DEAL_CARD_MS = 100
 
 export default function Game() {
   const { code } = useParams()
@@ -37,11 +39,11 @@ export default function Game() {
   const [round, setRound] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [dealAnimation, setDealAnimation] = useState(false)
   const [newRequestPing, setNewRequestPing] = useState(false)
   const [pendingFromSubcollection, setPendingFromSubcollection] = useState(false)
   const [tablePhase, setTablePhase] = useState('playing')
   const [frozenTrickReveal, setFrozenTrickReveal] = useState(null)
+  const [dealStep, setDealStep] = useState(0)
 
   const isOwner = session?.ownerId === currentUserId
   const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
@@ -56,11 +58,35 @@ export default function Game() {
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
   const sar = resolveSarForRound(session, round)
 
+  const activePlayerIds = useMemo(
+    () =>
+      (session?.turnOrder ?? [])
+        .map((id) => players.find((p) => p.id === id))
+        .filter((p) => p && p.status !== 'spectator')
+        .map((p) => p.id),
+    [session?.turnOrder, players],
+  )
+
+  const dealSequence = useMemo(
+    () => buildDealSequence(activePlayerIds, cardsPerRound, round?.dealerIndex ?? 0),
+    [activePlayerIds, cardsPerRound, round?.dealerIndex],
+  )
+
   const trickReveal = session?.lastTrickReveal ?? frozenTrickReveal
   const callingPhase = round?.status === ROUND_STATUS.CALLING && tablePhase === 'playing'
   const playingPhase = round?.status === ROUND_STATUS.PLAYING && tablePhase === 'playing'
   const roundComplete = round?.status === ROUND_STATUS.COMPLETE
   const scoresReady = Boolean(round?.results && Object.keys(round.results).length > 0)
+
+  const visibleHandCount = useMemo(() => {
+    if (tablePhase === 'dealing') {
+      return cardsDealtToPlayer(dealSequence, dealStep, currentUserId)
+    }
+    return me?.hand?.length ?? 0
+  }, [tablePhase, dealSequence, dealStep, currentUserId, me?.hand?.length])
+
+  const dealTargetPlayerId =
+    tablePhase === 'dealing' && dealStep > 0 ? dealSequence[dealStep - 1] : null
 
   const playableCards = useMemo(() => {
     if (!me?.hand || !playingPhase) return []
@@ -93,7 +119,6 @@ export default function Game() {
     return subscribeToRound(code, roundNumber, setRound)
   }, [code, roundNumber])
 
-  // Freeze trick data so animations can finish after server clears lastTrickReveal
   useEffect(() => {
     if (session?.lastTrickReveal?.at) {
       setFrozenTrickReveal(session.lastTrickReveal)
@@ -117,7 +142,7 @@ export default function Game() {
       timers.push(setTimeout(() => setTablePhase('collect'), TRICK_PAUSE_MS))
       timers.push(
         setTimeout(() => {
-          if (scoresReady) setTablePhase('round-scores')
+          setTablePhase('round-scores')
         }, TRICK_PAUSE_MS + COLLECT_MS),
       )
     } else {
@@ -143,23 +168,26 @@ export default function Game() {
   }, [roundComplete, scoresReady, frozenTrickReveal?.endsRound])
 
   useEffect(() => {
-    if (round?.status === ROUND_STATUS.CALLING && roundNumber > 0) {
-      setTablePhase('dealing')
-      setFrozenTrickReveal(null)
-      const t = setTimeout(() => setTablePhase('playing'), 1200)
-      return () => clearTimeout(t)
-    }
+    if (round?.status !== ROUND_STATUS.CALLING || roundNumber <= 0) return undefined
+
+    setTablePhase('dealing')
+    setFrozenTrickReveal(null)
+    setDealStep(0)
+
     return undefined
-  }, [round?.status, roundNumber])
+  }, [round?.status, roundNumber, round?.dealerIndex])
 
   useEffect(() => {
-    if (callingPhase && me?.hand?.length) {
-      setDealAnimation(true)
-      const t = setTimeout(() => setDealAnimation(false), 900)
-      return () => clearTimeout(t)
+    if (tablePhase !== 'dealing' || !dealSequence.length) return undefined
+
+    if (dealStep >= dealSequence.length) {
+      setTablePhase('playing')
+      return undefined
     }
-    return undefined
-  }, [callingPhase, roundNumber, me?.hand?.length])
+
+    const timer = setTimeout(() => setDealStep((s) => s + 1), DEAL_CARD_MS)
+    return () => clearTimeout(timer)
+  }, [tablePhase, dealStep, dealSequence.length])
 
   async function handleAcceptJoin(request) {
     setError('')
@@ -210,6 +238,7 @@ export default function Game() {
     try {
       const result = await advanceToNextRound(code)
       setFrozenTrickReveal(null)
+      setDealStep(0)
       setTablePhase('dealing')
       if (result.ended) {
         navigate(`/leaderboard/${code}`)
@@ -238,13 +267,14 @@ export default function Game() {
     return null
   })()
 
+  const handDimmed = tablePhase === 'trick-won' || tablePhase === 'collect'
   const handVisible =
     !isSpectator &&
-    tablePhase !== 'round-scores' &&
-    tablePhase !== 'collect' &&
-    tablePhase !== 'dealing' &&
     me?.hand?.length &&
-    (round?.status === ROUND_STATUS.PLAYING || round?.status === ROUND_STATUS.CALLING)
+    tablePhase !== 'round-scores' &&
+    (tablePhase === 'dealing' || round?.status === ROUND_STATUS.PLAYING || round?.status === ROUND_STATUS.CALLING)
+
+  const sidebarDimmed = tablePhase === 'round-scores'
 
   return (
     <PageLayout title={`Round ${roundNumber} · ${cardsPerRound} card${cardsPerRound === 1 ? '' : 's'}`}>
@@ -305,20 +335,21 @@ export default function Game() {
               busy={busy}
               scoresReady={scoresReady}
               onNextRound={handleNextRound}
+              onLeave={() => navigate('/')}
+              dealStep={dealStep}
+              dealTargetPlayerId={dealTargetPlayerId}
             />
 
             {handVisible ? (
-              <section>
+              <section className={handDimmed ? 'opacity-40 transition-opacity' : 'transition-opacity'}>
                 <h2 className="mb-3 text-center text-xs uppercase tracking-wider text-muted">
                   Your Hand
                 </h2>
-                <div
-                  className={`-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-2 md:flex-wrap md:justify-center md:overflow-visible ${
-                    dealAnimation ? 'opacity-80' : ''
-                  }`}
-                >
-                  {(me?.hand ?? []).map((card, index) => {
+                <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-2 md:flex-wrap md:justify-center md:overflow-visible">
+                  {(me?.hand ?? []).slice(0, visibleHandCount).map((card, index) => {
+                    const faceDown = tablePhase === 'dealing' && dealStep < dealSequence.length
                     const canPlay =
+                      !faceDown &&
                       playingPhase &&
                       tablePhase === 'playing' &&
                       isMyTurn &&
@@ -326,10 +357,11 @@ export default function Game() {
                     return (
                       <PlayingCard
                         key={card.id}
-                        card={card}
+                        card={faceDown ? null : card}
+                        faceDown={faceDown}
                         onClick={canPlay && !busy ? () => handlePlayCard(card) : undefined}
                         selected={canPlay}
-                        dealDelay={dealAnimation ? index * 0.08 : 0}
+                        dealDelay={tablePhase === 'dealing' ? 0 : index * 0.04}
                       />
                     )
                   })}
@@ -338,32 +370,34 @@ export default function Game() {
             ) : null}
           </div>
 
-          <aside className="space-y-4 lg:col-span-4 lg:sticky lg:top-4">
-            {tablePhase !== 'round-scores' ? (
-              <section className="rounded-xl border border-border bg-surface-raised p-4">
-                <h2 className="mb-3 text-xs uppercase tracking-wider text-muted">This round</h2>
-                <ul className="space-y-2">
-                  {(session?.turnOrder ?? [])
-                    .map((id) => players.find((p) => p.id === id))
-                    .filter((p) => p && p.status !== 'spectator')
-                    .map((player) => (
-                      <li
-                        key={player.id}
-                        className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
-                          player.id === session?.currentTurn
-                            ? 'bg-accent/15 ring-1 ring-accent/40'
-                            : 'bg-surface'
-                        }`}
-                      >
-                        <span className="truncate pr-2">{player.name}</span>
-                        <span className="text-right text-xs text-muted">
-                          call {player.call ?? '—'} · won {player.tricksWon ?? 0}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-              </section>
-            ) : null}
+          <aside
+            className={`space-y-4 lg:col-span-4 lg:sticky lg:top-4 ${
+              sidebarDimmed ? 'opacity-50 transition-opacity' : 'transition-opacity'
+            }`}
+          >
+            <section className="rounded-xl border border-border bg-surface-raised p-4">
+              <h2 className="mb-3 text-xs uppercase tracking-wider text-muted">This round</h2>
+              <ul className="space-y-2">
+                {(session?.turnOrder ?? [])
+                  .map((id) => players.find((p) => p.id === id))
+                  .filter((p) => p && p.status !== 'spectator')
+                  .map((player) => (
+                    <li
+                      key={player.id}
+                      className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
+                        player.id === session?.currentTurn && tablePhase === 'playing'
+                          ? 'bg-accent/15 ring-1 ring-accent/40'
+                          : 'bg-surface'
+                      }`}
+                    >
+                      <span className="truncate pr-2">{player.name}</span>
+                      <span className="text-right text-xs text-muted">
+                        call {player.call ?? '—'} · won {player.tricksWon ?? 0}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </section>
 
             {!isSpectator && callingPhase && me?.call == null && isMyTurn ? (
               <CallPicker

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { isCallLegal } from '../src/lib/callValidation.js'
+import { buildDealSequence, cardsDealtToPlayer } from '../src/lib/dealSequence.js'
 import {
   calculateRoundPoints,
   evaluateTrickWinner,
@@ -79,5 +80,10 @@ const freshRound = [
 ]
 assert.equal(isCallLegal(0, 1, freshRound, 'a'), true)
 assert.equal(isCallLegal(1, 1, freshRound, 'a'), true)
+
+const dealOrder = buildDealSequence(['a', 'b', 'c'], 2, 1)
+assert.deepEqual(dealOrder, ['b', 'c', 'a', 'b', 'c', 'a'])
+assert.equal(cardsDealtToPlayer(dealOrder, 3, 'b'), 1)
+assert.equal(cardsDealtToPlayer(dealOrder, 6, 'a'), 2)
 
 console.log('All game logic checks passed.')

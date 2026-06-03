@@ -1,5 +1,5 @@
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
 import { SAR_INFO } from '../../constants/game.js'
 import { calculateRoundPoints, isTrumpCard } from '../../lib/gameLogic.js'
 import Button from '../ui/Button.jsx'
@@ -25,6 +25,17 @@ const SEAT_CLASS = {
   'bottom-far': 'bottom-[18%] left-[18%]',
 }
 
+/** Fly offsets from table center toward each seat (px). */
+const SEAT_FLY = {
+  bottom: { x: 0, y: 72 },
+  top: { x: 0, y: -72 },
+  left: { x: -88, y: 0 },
+  right: { x: 88, y: 0 },
+  'top-left': { x: -56, y: -48 },
+  'top-right': { x: 56, y: -48 },
+  'bottom-far': { x: -40, y: 56 },
+}
+
 function orderPlayersForTable(players, turnOrder, meId) {
   const seated = turnOrder
     .map((id) => players.find((p) => p.id === id))
@@ -42,6 +53,28 @@ function getRoundPoints(player, round) {
   return calculateRoundPoints(player.call ?? 0, player.tricksWon ?? 0)
 }
 
+function DeckStack({ className = '' }) {
+  return (
+    <div className={`relative h-16 w-12 sm:h-20 sm:w-14 ${className}`}>
+      <div className="absolute inset-0 rounded-lg border-2 border-emerald-700/80 bg-gradient-to-br from-emerald-800 to-emerald-950 shadow-lg" />
+      <div className="absolute -right-1 -top-1 h-full w-full rounded-lg border border-emerald-600/50 bg-emerald-900/90" />
+      <div className="absolute -right-2 -top-2 h-full w-full rounded-lg border border-emerald-600/30 bg-emerald-900/70" />
+    </div>
+  )
+}
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setReduced(mq.matches)
+    const handler = () => setReduced(mq.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return reduced
+}
+
 export default function GameTable({
   players,
   turnOrder = [],
@@ -57,17 +90,51 @@ export default function GameTable({
   busy,
   scoresReady,
   onNextRound,
+  onLeave,
+  dealStep = 0,
+  dealTargetPlayerId = null,
   className = '',
 }) {
   const seated = orderPlayersForTable(players, turnOrder, currentUserId)
   const slots = SEAT_SLOTS[seated.length] ?? SEAT_SLOTS[4]
   const sarInfo = sar ? SAR_INFO[sar] : null
+  const reducedMotion = usePrefersReducedMotion()
+  const [leaveConfirm, setLeaveConfirm] = useState(false)
 
   const centerCards = trickReveal?.cards?.length ? trickReveal.cards : (cardsOnTable ?? [])
   const trickWinnerId = trickReveal?.winnerId
-  const showTrickHighlight = tablePhase === 'trick-won' || (tablePhase === 'round-scores' && trickReveal)
+  const isTrickPhase = tablePhase === 'trick-won'
+  const isCollect = tablePhase === 'collect'
   const showRoundScores = tablePhase === 'round-scores' && scoresReady
-  const collecting = tablePhase === 'collect'
+  const isDealing = tablePhase === 'dealing'
+
+  const winnerIndex = seated.findIndex((p) => p.id === trickWinnerId)
+  const winnerSlot = winnerIndex >= 0 ? slots[winnerIndex] : null
+  const winnerFly = winnerSlot ? SEAT_FLY[winnerSlot] : { x: 0, y: -60 }
+
+  const dealTargetIndex = seated.findIndex((p) => p.id === dealTargetPlayerId)
+  const dealTargetSlot = dealTargetIndex >= 0 ? slots[dealTargetIndex] : null
+  const dealFly = dealTargetSlot ? SEAT_FLY[dealTargetSlot] : { x: 0, y: -60 }
+
+  function cardAnimate(play) {
+    if (reducedMotion) {
+      if (isCollect) return { opacity: 0, scale: 0.5 }
+      return { opacity: 1, x: 0, y: 0, scale: 1 }
+    }
+    if (isCollect) {
+      return { x: 0, y: 0, scale: 0.15, opacity: 0, transition: { duration: 0.55 } }
+    }
+    if (isTrickPhase) {
+      return {
+        x: winnerFly.x,
+        y: winnerFly.y,
+        scale: play.userId === trickWinnerId ? 0.9 : 0.72,
+        opacity: play.userId === trickWinnerId ? 1 : 0.45,
+        transition: { duration: 0.65, ease: 'easeInOut' },
+      }
+    }
+    return { x: 0, y: 0, scale: 1, opacity: 1 }
+  }
 
   return (
     <section
@@ -88,26 +155,28 @@ export default function GameTable({
         </div>
 
         <div className="relative mx-auto min-h-[280px] w-full max-w-xl sm:min-h-[320px]">
-          {/* Player seats */}
           {seated.map((player, index) => {
             const slot = slots[index] ?? 'top'
             const isTurn = currentTurn === player.id
-            const isTrickWinner = trickWinnerId === player.id && showTrickHighlight
+            const isTrickWinner = trickWinnerId === player.id && isTrickPhase
             const roundPts = getRoundPoints(player, round)
+            const receivingDeal = isDealing && dealTargetPlayerId === player.id
 
             return (
               <motion.div
                 key={player.id}
                 layout
-                className={`absolute z-10 max-w-[120px] ${SEAT_CLASS[slot]}`}
+                className={`absolute z-10 max-w-[130px] ${SEAT_CLASS[slot]}`}
               >
                 <div
                   className={`rounded-xl px-2 py-1.5 text-center transition ${
-                    isTurn
+                    isTurn && !showRoundScores
                       ? 'bg-amber-500/20 ring-1 ring-amber-400/60'
                       : isTrickWinner
-                        ? 'bg-amber-400/25 ring-2 ring-amber-300/80'
-                        : 'bg-emerald-950/50 ring-1 ring-emerald-800/50'
+                        ? 'bg-amber-400/30 ring-2 ring-amber-300/90'
+                        : receivingDeal
+                          ? 'bg-emerald-800/60 ring-1 ring-emerald-400/50'
+                          : 'bg-emerald-950/50 ring-1 ring-emerald-800/50'
                   }`}
                 >
                   <p className="truncate text-xs font-medium text-emerald-50">{player.name}</p>
@@ -127,7 +196,7 @@ export default function GameTable({
                   ) : (
                     <p className="mt-0.5 text-[10px] text-emerald-200/60">
                       {player.tricksWon ?? 0} won
-                      {isTurn ? ' · turn' : ''}
+                      {isTurn && tablePhase === 'playing' ? ' · turn' : ''}
                     </p>
                   )}
                 </div>
@@ -135,77 +204,80 @@ export default function GameTable({
             )
           })}
 
-          {/* Center: deck / trick */}
-          <div className="absolute left-1/2 top-1/2 flex min-h-[140px] w-[85%] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center">
-            <AnimatePresence mode="wait">
-              {collecting ? (
-                <motion.div
-                  key="deck"
-                  initial={{ scale: 0.5, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.8, opacity: 0 }}
-                  className="flex flex-col items-center gap-2"
-                >
-                  <div className="relative h-16 w-12 rounded-lg border-2 border-emerald-700/80 bg-gradient-to-br from-emerald-800 to-emerald-950 shadow-lg sm:h-20 sm:w-14">
-                    <div className="absolute -right-1 -top-1 h-16 w-12 rounded-lg border border-emerald-600/50 bg-emerald-900/90 sm:h-20 sm:w-14" />
-                    <div className="absolute -right-2 -top-2 h-16 w-12 rounded-lg border border-emerald-600/30 bg-emerald-900/70 sm:h-20 sm:w-14" />
-                  </div>
-                  <p className="text-xs text-emerald-200/60">Gathering cards…</p>
-                </motion.div>
-              ) : centerCards.length ? (
-                <motion.div
-                  key="trick"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0, scale: 0.85, y: -20 }}
-                  className="flex flex-wrap items-end justify-center gap-2 sm:gap-3"
-                >
-                  {centerCards.map((play) => {
-                    const trump = isTrumpCard(play.card, sar ?? trickReveal?.sar)
-                    return (
-                      <motion.div
-                        key={`${play.userId}-${play.card.id}`}
-                        layout
-                        initial={{ scale: 0.7, opacity: 0, y: 16 }}
-                        animate={{
-                          scale: play.userId === trickWinnerId && showTrickHighlight ? 1.05 : 1,
-                          opacity: 1,
-                          y: 0,
-                        }}
-                        className={`text-center ${
-                          play.userId === trickWinnerId && showTrickHighlight
-                            ? 'rounded-xl ring-2 ring-amber-400/90'
-                            : trump
-                              ? 'rounded-xl ring-1 ring-emerald-400/40'
-                              : ''
-                        }`}
-                      >
-                        <PlayingCard card={play.card} small />
-                      </motion.div>
-                    )
-                  })}
-                </motion.div>
-              ) : tablePhase === 'dealing' ? (
-                <motion.div key="dealing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
-                  <div className="mx-auto mb-2 h-16 w-12 rounded-lg border-2 border-emerald-700/80 bg-gradient-to-br from-emerald-800 to-emerald-950 sm:h-20 sm:w-14" />
-                  <p className="text-sm text-emerald-100/60">Dealing cards…</p>
-                </motion.div>
-              ) : (
-                <motion.p
-                  key="empty"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-sm text-emerald-100/40"
-                >
-                  {showRoundScores ? 'Round complete' : 'Play a card'}
-                </motion.p>
-              )}
-            </AnimatePresence>
+          <div className="absolute left-1/2 top-1/2 flex min-h-[140px] w-[90%] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center">
+            {isDealing ? (
+              <div className="relative flex flex-col items-center">
+                <DeckStack />
+                <AnimatePresence>
+                  {dealTargetPlayerId ? (
+                    <motion.div
+                      key={`deal-${dealStep}`}
+                      initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                      animate={
+                        reducedMotion
+                          ? { opacity: 0 }
+                          : {
+                              x: dealFly.x,
+                              y: dealFly.y,
+                              opacity: 0,
+                              scale: 0.6,
+                            }
+                      }
+                      transition={{ duration: 0.35 }}
+                      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                    >
+                      <PlayingCard faceDown small />
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+                <p className="mt-3 text-xs text-emerald-200/60">
+                  Dealing… {dealStep > 0 ? `${dealStep}` : ''}
+                </p>
+              </div>
+            ) : null}
 
-            {showTrickHighlight && trickReveal?.winnerName ? (
+            {!isDealing && (isCollect || centerCards.length > 0) ? (
+              <div className="relative flex flex-wrap items-end justify-center gap-2 sm:gap-3">
+                {centerCards.map((play) => {
+                  const trump = isTrumpCard(play.card, sar ?? trickReveal?.sar)
+                  return (
+                    <motion.div
+                      key={`${play.userId}-${play.card.id}`}
+                      layout={!isTrickPhase && !isCollect}
+                      initial={reducedMotion ? false : { scale: 0.75, opacity: 0, y: 14 }}
+                      animate={cardAnimate(play)}
+                      className={`text-center ${
+                        play.userId === trickWinnerId && isTrickPhase
+                          ? 'rounded-xl ring-2 ring-amber-400/90'
+                          : trump
+                            ? 'rounded-xl ring-1 ring-emerald-400/40'
+                            : ''
+                      }`}
+                    >
+                      <PlayingCard card={play.card} small />
+                    </motion.div>
+                  )
+                })}
+                {isCollect ? (
+                  <motion.div
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                  >
+                    <DeckStack />
+                  </motion.div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!isDealing && !isCollect && centerCards.length === 0 && !showRoundScores ? (
+              <p className="text-sm text-emerald-100/35">Play a card</p>
+            ) : null}
+
+            {isTrickPhase && trickReveal?.winnerName ? (
               <motion.p
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 className="mt-3 text-center text-xs font-medium text-amber-200/90"
               >
                 {trickReveal.winnerName} wins the trick
@@ -229,15 +301,34 @@ export default function GameTable({
                 Waiting for host to start next round…
               </p>
             )}
-            <Link
-              to="/"
-              className="flex min-h-10 flex-1 items-center justify-center rounded-xl border border-emerald-800/60 bg-emerald-950/30 px-3 text-xs text-emerald-200/70 hover:text-emerald-50"
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => setLeaveConfirm(true)}
             >
               Leave session
-            </Link>
+            </Button>
           </motion.div>
         ) : null}
       </div>
+
+      {leaveConfirm ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-surface-raised p-5 shadow-xl">
+            <p className="text-center text-sm text-text">Leave this session? Your progress stays on the table.</p>
+            <div className="mt-4 flex gap-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setLeaveConfirm(false)}>
+                Stay
+              </Button>
+              <Button className="flex-1" onClick={() => onLeave?.()}>
+                Leave
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
+
+export { orderPlayersForTable, SEAT_FLY, SEAT_SLOTS }
