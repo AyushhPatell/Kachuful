@@ -94,7 +94,7 @@ npm run preview  # preview production build
 This repo includes `.github/workflows/deploy-firebase-hosting.yml`.
 
 - Trigger: push to `main` (or manual run)
-- Pipeline: install deps -> run logic tests -> build -> deploy to Firebase Hosting
+- Pipeline: install deps -> run logic tests -> build -> deploy hosting (rules deploy is best-effort)
 
 ### One-time setup
 
@@ -105,6 +105,10 @@ This repo includes `.github/workflows/deploy-firebase-hosting.yml`.
    - Settings -> Secrets and variables -> Actions -> New repository secret
    - Name: `FIREBASE_SERVICE_ACCOUNT`
    - Value: paste the full JSON key content
-3. Push to `main` and the workflow will deploy automatically (hosting + Firestore rules).
+3. **Publish Firestore rules once (required for join/play):**
+   - Firebase Console -> Firestore -> Rules
+   - Paste contents of `firestore.rules` from this repo
+   - Click **Publish**
+4. Push to `main` and the workflow deploys the web app automatically.
 
-If join fails with **Missing or insufficient permissions**, open Firebase Console → Firestore → Rules, paste `firestore.rules`, and click **Publish** (or push to `main` so CI deploys rules).
+If CI shows a Firestore rules step warning (`403` on `firestore.googleapis.com`), hosting still deploys. Rules can stay manual unless you grant the service account **Firebase Admin** (or Editor) in Google Cloud IAM.
