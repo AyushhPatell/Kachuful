@@ -1,0 +1,16 @@
+---
+description: Require research brief and user approval before UI/game-flow implementation
+alwaysApply: true
+---
+
+# Research before build (Kachuful)
+
+For **UI, game flow, animations, scoring display, lobby, or multi-step features**:
+
+1. Read `.cursor/skills/research-first/SKILL.md` and follow it.
+2. Do **not** replace entire screens or add new pages without a written flow in `docs/research/`.
+3. Prefer **one continuous game table** — no jarring screen swaps between trick, round end, and play.
+4. Present a short research brief and **wait for user approval** before coding.
+5. After approval, implement the **smallest diff** that matches the approved brief.
+
+Exception: bug fixes with clear repro, typos, config, or user says "implement now" / "skip research".
