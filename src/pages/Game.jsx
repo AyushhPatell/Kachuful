@@ -5,11 +5,13 @@ import CallPicker from '../components/game/CallPicker.jsx'
 import GameTable from '../components/game/GameTable.jsx'
 import PlayingCard, { SarBadge } from '../components/game/PlayingCard.jsx'
 import RoundSummary from '../components/game/RoundSummary.jsx'
+import TrickReveal from '../components/game/TrickReveal.jsx'
 import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useJoinRequests } from '../hooks/useJoinRequests.js'
 import {
   acceptJoinRequest,
+  acknowledgeTrickReveal,
   hasPendingJoinRequest,
   playCard,
   rejectJoinRequest,
@@ -48,9 +50,13 @@ export default function Game() {
   const isSpectator = me?.status === 'spectator' || (pendingJoin && !me)
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
 
-  const callingPhase = round?.status === ROUND_STATUS.CALLING
-  const playingPhase = round?.status === ROUND_STATUS.PLAYING
+  const trickReveal = session?.lastTrickReveal
+  const callingPhase = round?.status === ROUND_STATUS.CALLING && !trickReveal
+  const playingPhase = round?.status === ROUND_STATUS.PLAYING && !trickReveal
   const roundComplete = round?.status === ROUND_STATUS.COMPLETE
+  const showRoundSummary = roundComplete && !trickReveal
+
+  const TRICK_REVEAL_MS = 3500
 
   const playableCards = useMemo(() => {
     if (!me?.hand || !playingPhase) return []
@@ -102,6 +108,18 @@ export default function Game() {
   }, [code, roundNumber])
 
   useEffect(() => {
+    if (!trickReveal?.at) return undefined
+
+    const timer = setTimeout(() => {
+      acknowledgeTrickReveal(code).catch((err) => {
+        setError(err.message)
+      })
+    }, TRICK_REVEAL_MS)
+
+    return () => clearTimeout(timer)
+  }, [code, trickReveal?.at])
+
+  useEffect(() => {
     if (callingPhase && me?.hand?.length) {
       setDealAnimation(true)
       const t = setTimeout(() => setDealAnimation(false), 900)
@@ -136,7 +154,8 @@ export default function Game() {
   }
 
   const turnMessage = (() => {
-    if (roundComplete) return 'Round complete'
+    if (trickReveal) return 'Showing trick result…'
+    if (showRoundSummary) return 'Round complete'
     if (callingPhase && currentTurnPlayer) {
       if (me?.call != null) return 'Waiting for other players to call…'
       if (isMyTurn) return 'Your turn — choose how many tricks you will win'
@@ -149,7 +168,7 @@ export default function Game() {
     return null
   })()
 
-  if (roundComplete) {
+  if (showRoundSummary) {
     return (
       <PageLayout title={`Round ${roundNumber} summary`}>
         <div className="mx-auto my-auto w-full max-w-lg space-y-4">
@@ -206,7 +225,11 @@ export default function Game() {
 
         <div className="grid gap-4 lg:grid-cols-12 lg:items-start">
           <div className="space-y-4 lg:col-span-8">
-            <GameTable cardsOnTable={session?.cardsOnTable} players={players} />
+            {trickReveal ? (
+              <TrickReveal reveal={trickReveal} players={players} />
+            ) : (
+              <GameTable cardsOnTable={session?.cardsOnTable} players={players} />
+            )}
 
             {!isSpectator && (callingPhase || playingPhase) && me?.hand?.length ? (
               <section>
@@ -221,6 +244,7 @@ export default function Game() {
                   {(me?.hand ?? []).map((card, index) => {
                     const canPlay =
                       playingPhase &&
+                      !trickReveal &&
                       isMyTurn &&
                       playableCards.some((c) => c.id === card.id)
                     return (
@@ -262,7 +286,7 @@ export default function Game() {
                         : ''}
                     </span>
                     <span className="text-right text-xs text-muted">
-                      {player.sessionScore ?? 0} pts
+                      {player.tricksWon ?? 0} won · {player.sessionScore ?? 0} pts
                     </span>
                   </li>
                 ))}

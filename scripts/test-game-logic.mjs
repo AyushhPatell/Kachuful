@@ -6,6 +6,7 @@ import {
   getCardsPerRound,
   getMaxRound,
   getSarForRound,
+  resolveSarForRound,
   resolveVote,
 } from '../src/lib/gameLogic.js'
 
@@ -34,6 +35,25 @@ const trick = [
   { userId: 'c', card: { suit: 'clubs', rank: 'A', id: 'A-clubs' } },
 ]
 assert.equal(evaluateTrickWinner(trick, 'Ka').userId, 'c')
+
+// Low club still beats high non-trump when Ka (Kadi/clubs) is sar
+const lowTrumpWins = [
+  { userId: 'ayush', card: { suit: 'diamonds', rank: 'A', id: 'A-diamonds' } },
+  { userId: 'brij', card: { suit: 'diamonds', rank: '5', id: '5-diamonds' } },
+  { userId: 'amazoon', card: { suit: 'clubs', rank: '2', id: '2-clubs' } },
+]
+assert.equal(evaluateTrickWinner(lowTrumpWins, 'Ka').userId, 'amazoon')
+
+// Highest trump wins among multiple sar cards
+const twoTrumps = [
+  { userId: 'a', card: { suit: 'spades', rank: '10', id: '10-spades' } },
+  { userId: 'b', card: { suit: 'clubs', rank: '7', id: '7-clubs' } },
+  { userId: 'c', card: { suit: 'clubs', rank: 'K', id: 'K-clubs' } },
+]
+assert.equal(evaluateTrickWinner(twoTrumps, 'Ka').userId, 'c')
+
+assert.equal(resolveSarForRound({ currentRound: 1 }, { sar: 'Ka' }), 'Ka')
+assert.equal(resolveSarForRound({ currentRound: 1 }, null), 'Ka')
 
 assert.equal(resolveVote({ a: 'next', b: 'end' }), 'next')
 assert.equal(resolveVote({ a: 'end', b: 'end', c: 'next' }), 'end')

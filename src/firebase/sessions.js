@@ -27,6 +27,7 @@ import {
   getPlayersInTrick,
   getRoundDirection,
   getSarForRound,
+  resolveSarForRound,
 } from '../lib/gameLogic.js'
 import { generateSessionCode } from '../lib/sessionCode.js'
 import { MAX_PLAYERS, MIN_PLAYERS, ROUND_STATUS, SESSION_STATUS } from '../constants/game.js'
@@ -423,17 +424,20 @@ export async function submitCall(code, roundNumber, userId, call) {
 }
 
 export async function playCard(code, userId, card) {
-  let roundToFinalize = null
-
   await runTransaction(db, async (transaction) => {
     const sessionDoc = await transaction.get(sessionsRef(code))
     const playerDoc = await transaction.get(playerRef(code, userId))
     if (!sessionDoc.exists() || !playerDoc.exists()) throw new Error('Session not found')
 
     const liveSession = sessionDoc.data()
+    const roundDoc = await transaction.get(roundRef(code, liveSession.currentRound))
+    if (liveSession.lastTrickReveal) throw new Error('Wait for the trick result')
     if (liveSession.currentTurn !== userId) throw new Error('Not your turn')
 
-    const sar = liveSession.currentSar
+    const sar = resolveSarForRound(
+      liveSession,
+      roundDoc.exists() ? roundDoc.data() : null,
+    )
     const hand = playerDoc.data().hand ?? []
     const cardInHand = hand.find((c) => c.id === card.id)
     if (!cardInHand) throw new Error('Card not in your hand')
@@ -477,59 +481,77 @@ export async function playCard(code, userId, card) {
     }
 
     const winner = evaluateTrickWinner(cardsOnTable, sar)
+    if (!winner?.userId) throw new Error('Could not resolve trick winner')
+
     const winnerTricksWon = (playerDataById[winner.userId].tricksWon ?? 0) + 1
     const allEmpty = turnOrder.every((id) => (handsById[id] ?? []).length === 0)
+    const winnerName = playerDataById[winner.userId].name ?? 'Player'
 
     transaction.update(playerRef(code, userId), { hand: newHand })
     transaction.update(playerRef(code, winner.userId), { tricksWon: winnerTricksWon })
 
-    if (allEmpty) {
-      roundToFinalize = liveSession.currentRound
-      transaction.update(sessionsRef(code), {
-        cardsOnTable: [],
-        currentTurn: null,
-        trickExpectedCount: null,
-      })
-      transaction.update(roundRef(code, liveSession.currentRound), {
-        status: ROUND_STATUS.COMPLETE,
-      })
-      return
-    }
-
     transaction.update(sessionsRef(code), {
       cardsOnTable: [],
-      currentTurn: winner.userId,
       trickExpectedCount: null,
+      lastTrickReveal: {
+        cards: cardsOnTable,
+        winnerId: winner.userId,
+        winnerName,
+        sar,
+        endsRound: allEmpty,
+        at: Date.now(),
+      },
+      currentTurn: allEmpty ? null : winner.userId,
     })
   })
+}
 
-  if (roundToFinalize) {
-    await finalizeRoundScores(code, roundToFinalize)
-  }
+export async function acknowledgeTrickReveal(code) {
+  const sessionSnap = await getDoc(sessionsRef(code))
+  if (!sessionSnap.exists()) return
+
+  const session = sessionSnap.data()
+  const reveal = session.lastTrickReveal
+  if (!reveal) return
+
+  const roundNumber = session.currentRound
+
+  await updateDoc(sessionsRef(code), {
+    lastTrickReveal: deleteField(),
+  })
+
+  if (!reveal.endsRound) return
+
+  const roundSnap = await getDoc(roundRef(code, roundNumber))
+  const roundData = roundSnap.data()
+  if (roundData?.status === ROUND_STATUS.COMPLETE) return
+
+  await updateDoc(roundRef(code, roundNumber), { status: ROUND_STATUS.COMPLETE })
+  await finalizeRoundScores(code, roundNumber)
 }
 
 async function finalizeRoundScores(code, roundNumber) {
+  const roundSnap = await getDoc(roundRef(code, roundNumber))
+  const existingResults = roundSnap.data()?.results ?? {}
+  if (Object.keys(existingResults).length > 0) return
+
   const activePlayers = await getActivePlayers(code)
   const results = {}
 
-  await Promise.all(
-    activePlayers.map(async (p) => {
-      const snap = await getDoc(playerRef(code, p.id))
-      const data = snap.data()
-      const points = calculateRoundPoints(data.call ?? 0, data.tricksWon ?? 0)
+  for (const p of activePlayers) {
+    const snap = await getDoc(playerRef(code, p.id))
+    const data = snap.data() ?? {}
+    const call = data.call ?? 0
+    const won = data.tricksWon ?? 0
+    const points = calculateRoundPoints(call, won)
 
-      results[p.id] = {
-        call: data.call ?? 0,
-        won: data.tricksWon ?? 0,
-        points,
-      }
+    results[p.id] = { call, won, points }
 
-      await updateDoc(playerRef(code, p.id), {
-        sessionScore: (data.sessionScore ?? 0) + points,
-        roundsFailed: (data.roundsFailed ?? 0) + (points === 0 ? 1 : 0),
-      })
-    }),
-  )
+    await updateDoc(playerRef(code, p.id), {
+      sessionScore: (data.sessionScore ?? 0) + points,
+      roundsFailed: (data.roundsFailed ?? 0) + (points === 0 ? 1 : 0),
+    })
+  }
 
   await updateDoc(roundRef(code, roundNumber), { results })
 }

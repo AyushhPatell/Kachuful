@@ -29,7 +29,27 @@ export function getSarForRound(sessionRoundNumber) {
 }
 
 export function getSarSuit(sar) {
-  return SAR_INFO[sar].suit
+  return resolveTrumpSuit(sar)
+}
+
+/** Trump suit for a sar code (Ka/Chu/Fu/L), or null if unknown. */
+export function resolveTrumpSuit(sar) {
+  if (!sar || typeof sar !== 'string') return null
+  return SAR_INFO[sar]?.suit ?? null
+}
+
+/** Prefer session + round fields; fall back to round index. */
+export function resolveSarForRound(session, round) {
+  const roundNumber = session?.currentRound ?? round?.roundNumber ?? 1
+  const fromDoc = session?.currentSar ?? round?.sar
+  if (fromDoc && SAR_INFO[fromDoc]) return fromDoc
+  return getSarForRound(roundNumber)
+}
+
+export function isTrumpCard(card, sar) {
+  const trumpSuit = resolveTrumpSuit(sar)
+  if (!card?.suit || !trumpSuit) return false
+  return card.suit === trumpSuit
 }
 
 export function calculateRoundPoints(call, tricksWon) {
@@ -49,21 +69,29 @@ export function getPlayableCards(hand, cardsOnTable) {
   return matching.length > 0 ? matching : hand
 }
 
-/** Highest card wins; trump (sar suit) beats non-trump. */
+/**
+ * Highest card of led suit wins unless any Sar (trump) was played;
+ * then the highest trump wins (spec §10.3).
+ */
 export function evaluateTrickWinner(cardsOnTable, sar) {
   if (!cardsOnTable.length) return null
 
-  const trumpSuit = getSarSuit(sar)
-  const ledSuit = cardsOnTable[0].card.suit
-  const trumpPlays = cardsOnTable.filter((p) => p.card.suit === trumpSuit)
+  const trumpSuit = resolveTrumpSuit(sar)
+  const ledSuit = cardsOnTable[0]?.card?.suit
+  const trumpPlays = trumpSuit
+    ? cardsOnTable.filter((p) => p.card?.suit === trumpSuit)
+    : []
 
-  const pool = trumpPlays.length
-    ? trumpPlays
-    : cardsOnTable.filter((p) => p.card.suit === ledSuit)
+  const pool =
+    trumpPlays.length > 0
+      ? trumpPlays
+      : cardsOnTable.filter((p) => p.card?.suit === ledSuit)
+
+  if (!pool.length) return cardsOnTable[0]
 
   return pool.reduce((best, current) => {
-    const bestVal = RANK_VALUES[best.card.rank]
-    const currentVal = RANK_VALUES[current.card.rank]
+    const bestVal = RANK_VALUES[best.card.rank] ?? 0
+    const currentVal = RANK_VALUES[current.card.rank] ?? 0
     return currentVal > bestVal ? current : best
   })
 }
