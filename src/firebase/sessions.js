@@ -1,6 +1,6 @@
 import {
-  arrayUnion,
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -134,6 +134,7 @@ export async function createSession(displayName) {
     turnOrder: [],
     firstDealerIndex: 0,
     joinEventAt: 0,
+    joinRequestsByUser: {},
     createdAt: serverTimestamp(),
   })
 
@@ -174,17 +175,20 @@ export async function requestJoinSession(code, displayName) {
     throw new Error('Session is full (max 7 players)')
   }
 
-  const existingRequest = (session.joinRequests ?? []).find((r) => r.userId === userId)
-  if (existingRequest) {
+  if (session.joinRequestsByUser?.[userId]) {
+    return { pending: true }
+  }
+
+  const legacyRequest = (session.joinRequests ?? []).find((r) => r.userId === userId)
+  if (legacyRequest) {
     return { pending: true }
   }
 
   await updateDoc(sessionsRef(code), {
-    joinRequests: arrayUnion({
-      userId,
+    [`joinRequestsByUser.${userId}`]: {
       name: displayName,
       requestedAt: Date.now(),
-    }),
+    },
     joinEventAt: Date.now(),
   })
 
@@ -211,21 +215,36 @@ export async function acceptJoinRequest(code, request) {
     joinOrder,
   })
 
-  const filtered = (session.joinRequests ?? []).filter((r) => r.userId !== request.userId)
   await updateDoc(sessionsRef(code), {
-    joinRequests: filtered,
+    [`joinRequestsByUser.${request.userId}`]: deleteField(),
     joinEventAt: Date.now(),
   })
 }
 
 export async function rejectJoinRequest(code, userId) {
-  const sessionSnap = await getDoc(sessionsRef(code))
-  const session = sessionSnap.data()
-  const filtered = (session.joinRequests ?? []).filter((r) => r.userId !== userId)
   await updateDoc(sessionsRef(code), {
-    joinRequests: filtered,
+    [`joinRequestsByUser.${userId}`]: deleteField(),
     joinEventAt: Date.now(),
   })
+}
+
+export function parseJoinRequests(session) {
+  if (!session) return []
+
+  const fromMap = session.joinRequestsByUser
+  if (fromMap && typeof fromMap === 'object') {
+    return Object.entries(fromMap)
+      .map(([id, data]) => ({
+        userId: id,
+        name: data.name,
+        requestedAt: data.requestedAt ?? 0,
+      }))
+      .sort((a, b) => a.requestedAt - b.requestedAt)
+  }
+
+  return [...(session.joinRequests ?? [])].sort(
+    (a, b) => (a.requestedAt ?? 0) - (b.requestedAt ?? 0),
+  )
 }
 
 export async function startGame(code) {
@@ -332,11 +351,14 @@ export async function playCard(code, userId, card) {
     }
 
     const turnOrder = liveSession.turnOrder ?? []
-    const handSnapshots = await Promise.all(
+    const playerSnaps = await Promise.all(
       turnOrder.map((id) => transaction.get(playerRef(code, id))),
     )
+    const playerDataById = Object.fromEntries(
+      turnOrder.map((id, i) => [id, playerSnaps[i].data() ?? {}]),
+    )
     const handsById = Object.fromEntries(
-      turnOrder.map((id, i) => [id, handSnapshots[i].data()?.hand ?? []]),
+      turnOrder.map((id) => [id, playerDataById[id].hand ?? []]),
     )
 
     let trickExpectedCount = liveSession.trickExpectedCount
@@ -348,10 +370,10 @@ export async function playCard(code, userId, card) {
     handsById[userId] = newHand
 
     const cardsOnTable = [...prevTable, { userId, card: cardInHand }]
-    transaction.update(playerRef(code, userId), { hand: newHand })
 
     if (cardsOnTable.length < trickExpectedCount) {
       const nextTurn = getNextTrickPlayer(turnOrder, handsById, cardsOnTable, userId)
+      transaction.update(playerRef(code, userId), { hand: newHand })
       transaction.update(sessionsRef(code), {
         cardsOnTable,
         currentTurn: nextTurn,
@@ -361,11 +383,11 @@ export async function playCard(code, userId, card) {
     }
 
     const winner = evaluateTrickWinner(cardsOnTable, sar)
-    const winnerDoc = await transaction.get(playerRef(code, winner.userId))
-    const tricksWon = (winnerDoc.data()?.tricksWon ?? 0) + 1
-    transaction.update(playerRef(code, winner.userId), { tricksWon })
-
+    const winnerTricksWon = (playerDataById[winner.userId].tricksWon ?? 0) + 1
     const allEmpty = turnOrder.every((id) => (handsById[id] ?? []).length === 0)
+
+    transaction.update(playerRef(code, userId), { hand: newHand })
+    transaction.update(playerRef(code, winner.userId), { tricksWon: winnerTricksWon })
 
     if (allEmpty) {
       roundToFinalize = liveSession.currentRound

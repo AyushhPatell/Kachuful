@@ -7,6 +7,7 @@ import {
   acceptJoinRequest,
   rejectJoinRequest,
   startGame,
+  parseJoinRequests,
   subscribeToPlayers,
   subscribeToSession,
 } from '../firebase/sessions.js'
@@ -20,6 +21,7 @@ export default function Lobby() {
   const [players, setPlayers] = useState([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [newRequestPing, setNewRequestPing] = useState(false)
 
   const currentUserId = userId
   const isOwner = session?.ownerId === currentUserId
@@ -41,6 +43,16 @@ export default function Lobby() {
       navigate(`/leaderboard/${code}`)
     }
   }, [session?.status, code, navigate])
+
+  const joinRequests = parseJoinRequests(session)
+  const showJoinRequests = isOwner && joinRequests.length > 0
+
+  useEffect(() => {
+    if (!isOwner || !session?.joinEventAt) return undefined
+    setNewRequestPing(true)
+    const timer = setTimeout(() => setNewRequestPing(false), 2500)
+    return () => clearTimeout(timer)
+  }, [isOwner, session?.joinEventAt, joinRequests.length])
 
   async function handleStart() {
     setBusy(true)
@@ -71,8 +83,9 @@ export default function Lobby() {
   }
 
   const activeCount = players.filter((p) => p.status !== 'spectator').length
-  const joinRequests = session?.joinRequests ?? []
-  const showJoinRequests = isOwner && joinRequests.length > 0
+  const hasPendingRequest =
+    session?.joinRequestsByUser?.[currentUserId] ||
+    (session?.joinRequests ?? []).some((r) => r.userId === currentUserId)
 
   return (
     <PageLayout title="Lobby">
@@ -114,8 +127,14 @@ export default function Lobby() {
           </section>
 
           {showJoinRequests ? (
-            <section className="rounded-xl border border-border bg-surface-raised p-4">
-              <h2 className="mb-3 text-sm font-medium text-muted">Join requests</h2>
+            <section
+              className={`rounded-xl border bg-surface-raised p-4 transition ${
+                newRequestPing ? 'border-accent ring-1 ring-accent/40' : 'border-border'
+              }`}
+            >
+              <h2 className="mb-3 text-sm font-medium text-muted">
+                Join requests ({joinRequests.length})
+              </h2>
               <ul className="space-y-2">
                 {joinRequests.map((request) => (
                   <li
@@ -142,7 +161,7 @@ export default function Lobby() {
           ) : null}
         </div>
 
-        {!isOwner && joinRequests.some((r) => r.userId === currentUserId) ? (
+        {!isOwner && hasPendingRequest ? (
           <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
             Waiting for the session owner to accept your request…
           </div>
