@@ -1,12 +1,24 @@
 import { motion } from 'framer-motion'
 import PlayingCard from './PlayingCard.jsx'
 
-function getFanLayout(count) {
-  if (count <= 1) return { stepPx: 0, stepDeg: 0, height: '7.5rem' }
-  if (count === 2) return { stepPx: 56, stepDeg: 14, height: '8rem' }
-  if (count <= 4) return { stepPx: 40, stepDeg: 11, height: '8rem' }
-  if (count <= 6) return { stepPx: 32, stepDeg: 8, height: '8.5rem' }
-  return { stepPx: 24, stepDeg: 6, height: '9rem' }
+/** Gap between cards (px) so each card stays fully visible. */
+const GAP_BY_COUNT = {
+  1: 0,
+  2: 44,
+  3: 28,
+  4: 20,
+  5: 14,
+  6: 10,
+  7: 8,
+}
+
+const ROTATE_BY_COUNT = {
+  2: 10,
+  3: 8,
+  4: 7,
+  5: 6,
+  6: 5,
+  7: 4,
 }
 
 export default function HandFan({
@@ -25,19 +37,17 @@ export default function HandFan({
   if (!visible.length) return null
 
   const count = visible.length
-  const { stepPx, stepDeg, height } = getFanLayout(count)
+  const gap = GAP_BY_COUNT[count] ?? 8
+  const rotateStep = ROTATE_BY_COUNT[count] ?? 4
   const center = (count - 1) / 2
-  const fanWidth = count <= 1 ? 72 : Math.ceil((count - 1) * stepPx + 72)
 
   return (
     <div
-      className={`relative mx-auto flex items-end justify-center pb-1 ${dimmed ? 'opacity-40' : ''}`}
-      style={{ width: fanWidth, maxWidth: '100%', height }}
+      className={`flex min-h-[7.5rem] items-end justify-center pb-1 sm:min-h-[8rem] ${dimmed ? 'opacity-40' : ''}`}
+      style={{ gap }}
     >
       {visible.map((card, index) => {
         const offset = index - center
-        const rotate = offset * stepDeg
-        const tx = offset * stepPx
         const isHidden = hiddenCardId === card.id
         const canPlay = playableIds.has(card.id) && !faceDown && !busy
         const showFace = faceUpAfterDeal && !faceDown
@@ -47,18 +57,16 @@ export default function HandFan({
         return (
           <motion.div
             key={card.id}
-            layout
             layoutId={showFace ? `card-${card.id}` : undefined}
-            className="absolute bottom-0 origin-bottom"
+            className="shrink-0"
             style={{
-              left: '50%',
-              marginLeft: -18,
               zIndex: index,
-              transform: `translateX(${tx}px) rotate(${rotate}deg)`,
+              transform: `rotate(${offset * rotateStep}deg)`,
+              transformOrigin: 'bottom center',
             }}
-            initial={reducedMotion ? false : { opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: canPlay ? -8 : 0 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+            initial={reducedMotion ? false : { opacity: 0, y: 36 }}
+            animate={{ opacity: 1, y: canPlay ? -10 : 0 }}
+            transition={{ type: 'spring', stiffness: 340, damping: 28 }}
           >
             <PlayingCard
               card={faceDown ? null : card}
