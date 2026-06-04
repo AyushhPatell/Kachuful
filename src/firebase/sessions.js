@@ -110,6 +110,7 @@ async function beginRound(code, sessionRound, activePlayers, firstDealerIndex) {
     activePlayers.map((player) =>
       updateDoc(playerRef(code, player.id), {
         hand: hands[player.id],
+        handCount: cardsPerRound,
         call: null,
         tricksWon: 0,
         status: 'active',
@@ -151,8 +152,10 @@ export async function createSession(displayName) {
 
   await setDoc(playerRef(code, userId), {
     name: displayName,
+    photoURL: auth.currentUser.photoURL ?? null,
     status: 'active',
     hand: [],
+    handCount: 0,
     call: null,
     tricksWon: 0,
     sessionScore: 0,
@@ -180,8 +183,8 @@ export async function fetchJoinRequests(code) {
   return snap.docs.map((d) => mapJoinRequestDoc(d.id, d.data()))
 }
 
-async function writeJoinRequest(code, userId, displayName, requestedAt) {
-  const payload = { name: displayName, requestedAt, userId }
+async function writeJoinRequest(code, userId, displayName, requestedAt, photoURL = null) {
+  const payload = { name: displayName, requestedAt, userId, photoURL }
 
   // Primary store — one doc per joiner; collection listener shows every request.
   await setDoc(joinRequestRef(code, userId), payload, { merge: true })
@@ -226,7 +229,7 @@ export async function requestJoinSession(code, displayName) {
     Boolean(session.joinRequestsByUser?.[userId]) ||
     (session.joinRequests ?? []).some((r) => r.userId === userId)
 
-  await writeJoinRequest(code, userId, displayName, requestedAt)
+  await writeJoinRequest(code, userId, displayName, requestedAt, auth.currentUser.photoURL ?? null)
 
   return { pending: true, alreadyPending }
 }
@@ -255,8 +258,10 @@ export async function acceptJoinRequest(code, request) {
 
   await setDoc(playerRef(code, request.userId), {
     name: request.name,
+    photoURL: request.photoURL ?? null,
     status: isSpectator ? 'spectator' : 'active',
     hand: [],
+    handCount: 0,
     call: null,
     tricksWon: 0,
     sessionScore: 0,
@@ -471,7 +476,7 @@ export async function playCard(code, userId, card) {
 
     if (cardsOnTable.length < trickExpectedCount) {
       const nextTurn = getNextTrickPlayer(turnOrder, handsById, cardsOnTable, userId)
-      transaction.update(playerRef(code, userId), { hand: newHand })
+      transaction.update(playerRef(code, userId), { hand: newHand, handCount: newHand.length })
       transaction.update(sessionsRef(code), {
         cardsOnTable,
         currentTurn: nextTurn,
@@ -487,7 +492,7 @@ export async function playCard(code, userId, card) {
     const allEmpty = turnOrder.every((id) => (handsById[id] ?? []).length === 0)
     const winnerName = playerDataById[winner.userId].name ?? 'Player'
 
-    transaction.update(playerRef(code, userId), { hand: newHand })
+    transaction.update(playerRef(code, userId), { hand: newHand, handCount: newHand.length })
     transaction.update(playerRef(code, winner.userId), { tricksWon: winnerTricksWon })
 
     transaction.update(sessionsRef(code), {

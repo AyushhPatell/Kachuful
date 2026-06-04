@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import PageLayout from '../components/layout/PageLayout.jsx'
+import BottomSheet from '../components/game/BottomSheet.jsx'
 import CallPicker from '../components/game/CallPicker.jsx'
 import GameTable from '../components/game/GameTable.jsx'
-import PlayingCard, { SarBadge } from '../components/game/PlayingCard.jsx'
 import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useJoinRequests } from '../hooks/useJoinRequests.js'
@@ -22,16 +21,18 @@ import {
 } from '../firebase/sessions.js'
 import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
 import { getCardsPerRound, getPlayableCards, resolveSarForRound } from '../lib/gameLogic.js'
+import { getSeatPositions, orderPlayersForTable } from '../lib/seatLayout.js'
 import { ROUND_STATUS } from '../constants/game.js'
 
 const TRICK_PAUSE_MS = 1200
 const COLLECT_MS = 700
 const DEAL_CARD_MS = 420
+const PLAY_FLY_MS = 400
 
 export default function Game() {
   const { code } = useParams()
   const navigate = useNavigate()
-  const { userId } = useAuth()
+  const { userId, photoURL: authPhotoURL } = useAuth()
   const currentUserId = userId
 
   const [session, setSession] = useState(null)
@@ -44,6 +45,11 @@ export default function Game() {
   const [tablePhase, setTablePhase] = useState('playing')
   const [frozenTrickReveal, setFrozenTrickReveal] = useState(null)
   const [dealStep, setDealStep] = useState(0)
+  const [flyPlay, setFlyPlay] = useState(null)
+  const [callSheetOpen, setCallSheetOpen] = useState(false)
+
+  const lastTableLenRef = useRef(0)
+  const localFlyRef = useRef(false)
 
   const isOwner = session?.ownerId === currentUserId
   const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
@@ -58,14 +64,12 @@ export default function Game() {
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
   const sar = resolveSarForRound(session, round)
 
-  const activePlayerIds = useMemo(
-    () =>
-      (session?.turnOrder ?? [])
-        .map((id) => players.find((p) => p.id === id))
-        .filter((p) => p && p.status !== 'spectator')
-        .map((p) => p.id),
-    [session?.turnOrder, players],
+  const seated = useMemo(
+    () => orderPlayersForTable(players, session?.turnOrder ?? [], currentUserId),
+    [players, session?.turnOrder, currentUserId],
   )
+
+  const activePlayerIds = useMemo(() => seated.map((p) => p.id), [seated])
 
   const dealSequence = useMemo(
     () => buildDealSequence(activePlayerIds, cardsPerRound, round?.dealerIndex ?? 0),
@@ -92,6 +96,13 @@ export default function Game() {
     if (!me?.hand || !playingPhase) return []
     return getPlayableCards(me.hand, session?.cardsOnTable ?? [])
   }, [me?.hand, playingPhase, session?.cardsOnTable])
+
+  const showCallPicker =
+    !isSpectator && callingPhase && me?.call == null && isMyTurn
+
+  useEffect(() => {
+    setCallSheetOpen(showCallPicker)
+  }, [showCallPicker])
 
   useEffect(() => {
     const unsubSession = subscribeToSession(code, setSession)
@@ -189,6 +200,43 @@ export default function Game() {
     return () => clearTimeout(timer)
   }, [tablePhase, dealStep, dealSequence.length])
 
+  useEffect(() => {
+    const table = session?.cardsOnTable ?? []
+    if (table.length <= lastTableLenRef.current) {
+      lastTableLenRef.current = table.length
+      return undefined
+    }
+
+    const newPlay = table[table.length - 1]
+    lastTableLenRef.current = table.length
+
+    if (newPlay.userId === currentUserId || localFlyRef.current) {
+      localFlyRef.current = false
+      return undefined
+    }
+
+    const seatIndex = seated.findIndex((p) => p.id === newPlay.userId)
+    const positions = getSeatPositions(seated.length)
+    const pos = seatIndex >= 0 ? positions[seatIndex] : null
+
+    setFlyPlay({
+      card: newPlay.card,
+      fromLocal: false,
+      fromX: pos?.flyX ?? 0,
+      fromY: pos?.flyY ?? -80,
+      key: `${newPlay.card.id}-${Date.now()}`,
+    })
+
+    const timer = setTimeout(() => setFlyPlay(null), PLAY_FLY_MS + 80)
+    return () => clearTimeout(timer)
+  }, [session?.cardsOnTable, currentUserId, seated])
+
+  useEffect(() => {
+    if ((session?.cardsOnTable ?? []).length === 0) {
+      lastTableLenRef.current = 0
+    }
+  }, [session?.cardsOnTable?.length])
+
   async function handleAcceptJoin(request) {
     setError('')
     try {
@@ -212,6 +260,7 @@ export default function Game() {
     setError('')
     try {
       await submitCall(code, roundNumber, currentUserId, call)
+      setCallSheetOpen(false)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -220,15 +269,24 @@ export default function Game() {
   }
 
   async function handlePlayCard(card) {
-    if (!isMyTurn || !playingPhase) return
+    if (!isMyTurn || !playingPhase || busy) return
+
+    localFlyRef.current = true
+    setFlyPlay({ card, fromLocal: true, key: `${card.id}-${Date.now()}` })
     setBusy(true)
     setError('')
+
+    await new Promise((r) => setTimeout(r, PLAY_FLY_MS))
+
     try {
       await playCard(code, currentUserId, card)
     } catch (err) {
       setError(err.message)
+      setFlyPlay(null)
+      localFlyRef.current = false
     } finally {
       setBusy(false)
+      setTimeout(() => setFlyPlay(null), 120)
     }
   }
 
@@ -257,48 +315,59 @@ export default function Game() {
     if (tablePhase === 'dealing') return 'Dealing…'
     if (callingPhase && currentTurnPlayer) {
       if (me?.call != null) return 'Waiting for other players to call…'
-      if (isMyTurn) return 'Your turn — choose how many tricks you will win'
+      if (isMyTurn) return 'Your turn — call your tricks'
       return `Waiting for ${currentTurnPlayer.name} to call`
     }
     if (playingPhase && currentTurnPlayer) {
-      if (isMyTurn) return 'Your turn — tap a card to play'
+      if (isMyTurn) return 'Your turn — tap a card'
       return `${currentTurnPlayer.name}'s turn`
     }
     return null
   })()
 
-  const handDimmed = tablePhase === 'trick-won' || tablePhase === 'collect'
   const handVisible =
     !isSpectator &&
     me?.hand?.length &&
     tablePhase !== 'round-scores' &&
     (tablePhase === 'dealing' || round?.status === ROUND_STATUS.PLAYING || round?.status === ROUND_STATUS.CALLING)
 
-  const sidebarDimmed = tablePhase === 'round-scores'
+  const callPicker = showCallPicker ? (
+    <CallPicker
+      cardsPerRound={cardsPerRound}
+      players={players}
+      userId={currentUserId}
+      onSubmit={handleSubmitCall}
+      busy={busy}
+    />
+  ) : null
 
   return (
-    <PageLayout title={`Round ${roundNumber} · ${cardsPerRound} card${cardsPerRound === 1 ? '' : 's'}`}>
-      <div className="mx-auto my-auto w-full max-w-5xl space-y-4">
-        <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
-          <SarBadge sar={session?.currentSar} />
+    <div className="flex min-h-svh flex-col bg-[#060806] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-4">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-2 sm:gap-3">
+        {/* Top bar */}
+        <div className="flex items-center justify-between gap-2">
+          <Link to="/" className="text-xs text-zinc-500 hover:text-zinc-300">
+            ← Exit
+          </Link>
           {turnMessage ? (
             <p
-              className={`rounded-full px-4 py-2 text-center text-sm ${
+              className={`max-w-[70%] truncate rounded-full px-3 py-1.5 text-center text-xs ${
                 isMyTurn && (playingPhase || callingPhase)
-                  ? 'bg-accent/20 text-accent'
-                  : 'bg-surface-raised text-muted'
+                  ? 'bg-amber-500/20 text-amber-200'
+                  : 'bg-white/5 text-zinc-400'
               }`}
             >
               {turnMessage}
             </p>
-          ) : null}
+          ) : (
+            <span className="w-8" />
+          )}
         </div>
 
         {isOwner && joinRequests.length > 0 ? (
-          <div className="space-y-3">
-            <div className="rounded-lg border border-accent/40 bg-accent/10 px-4 py-3 text-center text-sm text-accent">
-              {joinRequests.length} player{joinRequests.length === 1 ? '' : 's'} wants to join — accept or
-              reject below.
+          <div className="space-y-2">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-xs text-amber-200">
+              {joinRequests.length} join request{joinRequests.length === 1 ? '' : 's'}
             </div>
             <JoinRequestsPanel
               joinRequests={joinRequests}
@@ -311,130 +380,86 @@ export default function Game() {
         ) : null}
 
         {isSpectator ? (
-          <div className="rounded-xl border border-border bg-surface-raised px-4 py-3 text-center text-sm text-muted">
+          <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center text-xs text-zinc-400">
             {pendingJoin && !me
-              ? 'Watching as guest — ask the host to accept you to play the next round.'
-              : 'Spectator mode — you will join as a player from the next round.'}
+              ? 'Watching — ask the host to accept you for the next round.'
+              : 'Spectator — you will play from the next round.'}
           </div>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-12 lg:items-start">
-          <div className="space-y-4 lg:col-span-8">
-            <GameTable
-              players={players}
-              turnOrder={session?.turnOrder ?? []}
-              cardsOnTable={session?.cardsOnTable}
-              trickReveal={trickReveal}
-              tablePhase={tablePhase}
-              round={round}
-              roundNumber={roundNumber}
-              sar={sar}
-              currentTurn={session?.currentTurn}
-              currentUserId={currentUserId}
-              isOwner={isOwner}
-              busy={busy}
-              scoresReady={scoresReady}
-              onNextRound={handleNextRound}
-              onLeave={() => navigate('/')}
-              dealStep={dealStep}
-              dealTargetPlayerId={dealTargetPlayerId}
-            />
+        <GameTable
+          className="flex-1"
+          players={players}
+          turnOrder={session?.turnOrder ?? []}
+          cardsOnTable={session?.cardsOnTable}
+          trickReveal={trickReveal}
+          tablePhase={tablePhase}
+          round={round}
+          roundNumber={roundNumber}
+          sar={sar}
+          cardsPerRound={cardsPerRound}
+          currentTurn={session?.currentTurn}
+          currentUserId={currentUserId}
+          isOwner={isOwner}
+          busy={busy}
+          scoresReady={scoresReady}
+          onNextRound={handleNextRound}
+          onLeave={() => navigate('/')}
+          dealStep={dealStep}
+          dealTargetPlayerId={dealTargetPlayerId}
+          dealSequence={dealSequence}
+          me={me}
+          handVisible={handVisible}
+          visibleHandCount={visibleHandCount}
+          playableCards={playableCards}
+          onPlayCard={handlePlayCard}
+          flyPlay={flyPlay}
+          authPhotoURL={authPhotoURL}
+        />
 
-            {handVisible ? (
-              <section className={handDimmed ? 'opacity-40 transition-opacity' : 'transition-opacity'}>
-                <h2 className="mb-3 text-center text-xs uppercase tracking-wider text-muted">
-                  Your Hand
-                </h2>
-                <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-2 md:flex-wrap md:justify-center md:overflow-visible">
-                  {(me?.hand ?? []).slice(0, visibleHandCount).map((card, index) => {
-                    const faceDown = tablePhase === 'dealing' && dealStep < dealSequence.length
-                    const canPlay =
-                      !faceDown &&
-                      playingPhase &&
-                      tablePhase === 'playing' &&
-                      isMyTurn &&
-                      playableCards.some((c) => c.id === card.id)
-                    return (
-                      <PlayingCard
-                        key={card.id}
-                        card={faceDown ? null : card}
-                        faceDown={faceDown}
-                        onClick={canPlay && !busy ? () => handlePlayCard(card) : undefined}
-                        selected={canPlay}
-                        dealDelay={tablePhase === 'dealing' ? 0 : index * 0.04}
-                      />
-                    )
-                  })}
-                </div>
-              </section>
-            ) : null}
+        {/* Desktop call panel */}
+        {!isSpectator && callingPhase && me?.call == null && !isMyTurn ? (
+          <div className="hidden rounded-xl border border-white/10 bg-white/5 p-4 text-center text-sm text-zinc-400 lg:block">
+            {currentTurnPlayer?.name ?? 'Another player'} is choosing their call first.
           </div>
+        ) : null}
 
-          <aside
-            className={`space-y-4 lg:col-span-4 lg:sticky lg:top-4 ${
-              sidebarDimmed ? 'opacity-50 transition-opacity' : 'transition-opacity'
-            }`}
-          >
-            <section className="rounded-xl border border-border bg-surface-raised p-4">
-              <h2 className="mb-3 text-xs uppercase tracking-wider text-muted">This round</h2>
-              <ul className="space-y-2">
-                {(session?.turnOrder ?? [])
-                  .map((id) => players.find((p) => p.id === id))
-                  .filter((p) => p && p.status !== 'spectator')
-                  .map((player) => (
-                    <li
-                      key={player.id}
-                      className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
-                        player.id === session?.currentTurn && tablePhase === 'playing'
-                          ? 'bg-accent/15 ring-1 ring-accent/40'
-                          : 'bg-surface'
-                      }`}
-                    >
-                      <span className="truncate pr-2">{player.name}</span>
-                      <span className="text-right text-xs text-muted">
-                        call {player.call ?? '—'} · won {player.tricksWon ?? 0}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-            </section>
+        {showCallPicker ? (
+          <div className="hidden lg:block">{callPicker}</div>
+        ) : null}
 
-            {!isSpectator && callingPhase && me?.call == null && isMyTurn ? (
-              <CallPicker
-                cardsPerRound={cardsPerRound}
-                players={players}
-                userId={currentUserId}
-                onSubmit={handleSubmitCall}
-                busy={busy}
-              />
-            ) : null}
-
-            {!isSpectator && callingPhase && me?.call == null && !isMyTurn ? (
-              <div className="rounded-xl border border-border bg-surface-raised p-4 text-center text-sm text-muted">
-                {currentTurnPlayer?.name ?? 'Another player'} is choosing their call first.
-              </div>
-            ) : null}
-
-            {tablePhase !== 'round-scores' ? (
-              <Link to="/" className="block text-center text-sm text-muted hover:text-text">
-                Leave session
-              </Link>
-            ) : null}
-          </aside>
-        </div>
+        {!isSpectator && tablePhase !== 'round-scores' ? (
+          <Link to="/" className="hidden text-center text-xs text-zinc-500 hover:text-zinc-300 lg:block">
+            Leave session
+          </Link>
+        ) : null}
 
         {listenError ? (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            Join requests may not update live — publish Firestore rules for joinRequests, then reload.
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            Join requests may not update live — publish Firestore rules, then reload.
           </div>
         ) : null}
 
         {error ? (
-          <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          <div className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs text-red-100">
             {error}
           </div>
         ) : null}
       </div>
-    </PageLayout>
+
+      <BottomSheet
+        open={callSheetOpen && showCallPicker}
+        onClose={() => setCallSheetOpen(false)}
+        title="Call your tricks"
+      >
+        {callPicker}
+      </BottomSheet>
+
+      {!isSpectator && callingPhase && me?.call == null && !isMyTurn ? (
+        <div className="fixed inset-x-4 bottom-4 z-30 rounded-xl border border-white/10 bg-zinc-900/95 p-3 text-center text-xs text-zinc-400 backdrop-blur lg:hidden">
+          {currentTurnPlayer?.name ?? 'Another player'} is choosing their call…
+        </div>
+      ) : null}
+    </div>
   )
 }

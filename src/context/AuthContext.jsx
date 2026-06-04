@@ -37,6 +37,7 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       userId: user?.uid ?? null,
+      photoURL: user?.photoURL ?? null,
       displayName,
       authReady,
       loading,
