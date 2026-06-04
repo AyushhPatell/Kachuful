@@ -10,6 +10,7 @@ import PlayerAvatar from './PlayerAvatar.jsx'
 import PlayingCard, { DeckStack, SarBadge } from './PlayingCard.jsx'
 import SeatPod from './SeatPod.jsx'
 import TableSurface from './TableSurface.jsx'
+import GameMenu from './GameMenu.jsx'
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false)
@@ -56,6 +57,10 @@ export default function GameTable({
   onPlayCard,
   flyPlay,
   authPhotoURL,
+  sessionCode,
+  turnMessage,
+  isMyTurn,
+  sortedHand = [],
   className = '',
 }) {
   const seated = orderPlayersForTable(players, turnOrder, currentUserId)
@@ -113,12 +118,15 @@ export default function GameTable({
     <section className={`relative ${className}`}>
       <TableSurface>
         {/* HUD on felt */}
-        <div className="absolute left-0 right-0 top-3 z-20 flex flex-wrap items-start justify-between gap-2 px-3 sm:px-4">
+        <div className="absolute left-0 right-0 top-3 z-20 flex items-start justify-between gap-2 px-3 sm:px-4">
           <div className="rounded-full bg-black/25 px-3 py-1 text-[11px] font-medium text-emerald-100/90 backdrop-blur-sm">
             Round {roundNumber}
             {cardsPerRound ? ` · ${cardsPerRound} card${cardsPerRound === 1 ? '' : 's'}` : ''}
           </div>
-          {sarInfo ? <SarBadge sar={sar} compact /> : null}
+          <div className="flex items-center gap-2">
+            {sarInfo ? <SarBadge sar={sar} compact /> : null}
+            {sessionCode ? <GameMenu sessionCode={sessionCode} /> : null}
+          </div>
         </div>
 
         {/* Seats */}
@@ -218,7 +226,31 @@ export default function GameTable({
           ) : null}
 
           {!isDealing && !isCollect && centerCards.length === 0 && !showRoundScores && !flyPlay ? (
-            <p className="text-sm text-emerald-100/30">Play a card</p>
+            turnMessage ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className={`max-w-[90%] rounded-2xl px-5 py-3 text-center shadow-lg backdrop-blur-sm ${
+                  isMyTurn
+                    ? 'bg-amber-500/25 ring-1 ring-amber-400/40'
+                    : 'bg-black/35 ring-1 ring-white/10'
+                }`}
+              >
+                <p
+                  className={`text-sm font-medium leading-snug ${
+                    isMyTurn ? 'text-amber-50' : 'text-emerald-100/90'
+                  }`}
+                >
+                  {turnMessage}
+                </p>
+              </motion.div>
+            ) : (
+              <p className="text-sm text-emerald-100/30">Play a card</p>
+            )
+          ) : null}
+
+          {turnMessage && !isDealing && centerCards.length > 0 && !isTrickPhase ? (
+            <p className="mt-2 max-w-[90%] text-center text-[11px] text-emerald-100/60">{turnMessage}</p>
           ) : null}
 
           {isTrickPhase && trickReveal?.winnerName ? (
@@ -280,7 +312,7 @@ export default function GameTable({
             </div>
 
             <HandFan
-              cards={me?.hand ?? []}
+              cards={sortedHand}
               visibleCount={visibleHandCount}
               faceDown={isDealing && !dealComplete}
               faceUpAfterDeal={faceUpHand}

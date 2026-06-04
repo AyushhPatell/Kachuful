@@ -21,6 +21,7 @@ import {
 } from '../firebase/sessions.js'
 import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
 import { getCardsPerRound, getPlayableCards, resolveSarForRound } from '../lib/gameLogic.js'
+import { sortHand } from '../lib/sortHand.js'
 import { getSeatPositions, orderPlayersForTable } from '../lib/seatLayout.js'
 import { ROUND_STATUS } from '../constants/game.js'
 
@@ -96,6 +97,14 @@ export default function Game() {
     if (!me?.hand || !playingPhase) return []
     return getPlayableCards(me.hand, session?.cardsOnTable ?? [])
   }, [me?.hand, playingPhase, session?.cardsOnTable])
+
+  const sortedHand = useMemo(() => {
+    const hand = me?.hand ?? []
+    if (tablePhase === 'dealing' && dealStep < dealSequence.length) {
+      return hand
+    }
+    return sortHand(hand)
+  }, [me?.hand, tablePhase, dealStep, dealSequence.length])
 
   const showCallPicker =
     !isSpectator && callingPhase && me?.call == null && isMyTurn
@@ -315,8 +324,8 @@ export default function Game() {
     if (tablePhase === 'dealing') return 'Dealing…'
     if (callingPhase && currentTurnPlayer) {
       if (me?.call != null) return 'Waiting for other players to call…'
-      if (isMyTurn) return 'Your turn — call your tricks'
-      return `Waiting for ${currentTurnPlayer.name} to call`
+      if (isMyTurn) return 'Your turn — pick how many tricks you will win'
+      return `${currentTurnPlayer.name} is choosing their call`
     }
     if (playingPhase && currentTurnPlayer) {
       if (isMyTurn) return 'Your turn — tap a card'
@@ -349,19 +358,6 @@ export default function Game() {
           <Link to="/" className="text-xs text-zinc-500 hover:text-zinc-300">
             ← Exit
           </Link>
-          {turnMessage ? (
-            <p
-              className={`max-w-[70%] truncate rounded-full px-3 py-1.5 text-center text-xs ${
-                isMyTurn && (playingPhase || callingPhase)
-                  ? 'bg-amber-500/20 text-amber-200'
-                  : 'bg-white/5 text-zinc-400'
-              }`}
-            >
-              {turnMessage}
-            </p>
-          ) : (
-            <span className="w-8" />
-          )}
         </div>
 
         {isOwner && joinRequests.length > 0 ? (
@@ -415,14 +411,11 @@ export default function Game() {
           onPlayCard={handlePlayCard}
           flyPlay={flyPlay}
           authPhotoURL={authPhotoURL}
+          sessionCode={code}
+          turnMessage={turnMessage}
+          isMyTurn={isMyTurn && (playingPhase || callingPhase)}
+          sortedHand={sortedHand}
         />
-
-        {/* Desktop call panel */}
-        {!isSpectator && callingPhase && me?.call == null && !isMyTurn ? (
-          <div className="hidden rounded-xl border border-white/10 bg-white/5 p-4 text-center text-sm text-zinc-400 lg:block">
-            {currentTurnPlayer?.name ?? 'Another player'} is choosing their call first.
-          </div>
-        ) : null}
 
         {showCallPicker ? (
           <div className="hidden lg:block">{callPicker}</div>
@@ -454,12 +447,6 @@ export default function Game() {
       >
         {callPicker}
       </BottomSheet>
-
-      {!isSpectator && callingPhase && me?.call == null && !isMyTurn ? (
-        <div className="fixed inset-x-4 bottom-4 z-30 rounded-xl border border-white/10 bg-zinc-900/95 p-3 text-center text-xs text-zinc-400 backdrop-blur lg:hidden">
-          {currentTurnPlayer?.name ?? 'Another player'} is choosing their call…
-        </div>
-      ) : null}
     </div>
   )
 }
