@@ -315,7 +315,9 @@ export default function GameTable({
       {leaveConfirm ? (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-sm rounded-xl border border-border bg-surface-raised p-5 shadow-xl">
-            <p className="text-center text-sm text-text">Leave this session? Your progress stays on the table.</p>
+            <p className="text-center text-sm text-text">
+              Leave this session? You will be removed from the table for everyone else.
+            </p>
             <div className="mt-4 flex gap-2">
               <Button variant="secondary" className="flex-1" onClick={() => setLeaveConfirm(false)}>
                 Stay

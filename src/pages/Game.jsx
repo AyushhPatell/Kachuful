@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import PageLayout from '../components/layout/PageLayout.jsx'
 import CallPicker from '../components/game/CallPicker.jsx'
 import GameTable from '../components/game/GameTable.jsx'
@@ -20,6 +20,7 @@ import {
   subscribeToRound,
   subscribeToSession,
 } from '../firebase/sessions.js'
+import { useLeaveSession } from '../hooks/useLeaveSession.js'
 import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
 import { getCardsPerRound, getPlayableCards, resolveSarForRound } from '../lib/gameLogic.js'
 import { ROUND_STATUS } from '../constants/game.js'
@@ -31,6 +32,7 @@ const DEAL_CARD_MS = 420
 export default function Game() {
   const { code } = useParams()
   const navigate = useNavigate()
+  const leaveSession = useLeaveSession(code)
   const { userId } = useAuth()
   const currentUserId = userId
 
@@ -335,7 +337,7 @@ export default function Game() {
               busy={busy}
               scoresReady={scoresReady}
               onNextRound={handleNextRound}
-              onLeave={() => navigate('/')}
+              onLeave={leaveSession}
               dealStep={dealStep}
               dealTargetPlayerId={dealTargetPlayerId}
             />
@@ -416,9 +418,13 @@ export default function Game() {
             ) : null}
 
             {tablePhase !== 'round-scores' ? (
-              <Link to="/" className="block text-center text-sm text-muted hover:text-text">
+              <button
+                type="button"
+                className="block w-full text-center text-sm text-muted hover:text-text"
+                onClick={leaveSession}
+              >
                 Leave session
-              </Link>
+              </button>
             ) : null}
           </aside>
         </div>

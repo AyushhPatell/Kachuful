@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import PageLayout from '../components/layout/PageLayout.jsx'
 import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
 import Button from '../components/ui/Button.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useJoinRequests } from '../hooks/useJoinRequests.js'
+import { useLeaveSession } from '../hooks/useLeaveSession.js'
 import {
   acceptJoinRequest,
   hasPendingJoinRequest,
@@ -20,6 +21,7 @@ import { MAX_PLAYERS, MIN_PLAYERS } from '../constants/game.js'
 export default function Lobby() {
   const { code } = useParams()
   const navigate = useNavigate()
+  const leaveSession = useLeaveSession(code)
   const { userId } = useAuth()
   const [session, setSession] = useState(null)
   const [players, setPlayers] = useState([])
@@ -188,9 +190,13 @@ export default function Lobby() {
           <p className="text-center text-sm text-muted">Waiting for the owner to start the game…</p>
         )}
 
-        <Link to="/" className="block text-center text-sm text-muted hover:text-text">
+        <button
+          type="button"
+          className="block w-full text-center text-sm text-muted hover:text-text"
+          onClick={leaveSession}
+        >
           Back to menu
-        </Link>
+        </button>
       </div>
     </PageLayout>
   )
