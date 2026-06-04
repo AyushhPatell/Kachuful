@@ -421,12 +421,6 @@ export default function Game() {
           <div className="hidden lg:block">{callPicker}</div>
         ) : null}
 
-        {!isSpectator && tablePhase !== 'round-scores' ? (
-          <Link to="/" className="hidden text-center text-xs text-zinc-500 hover:text-zinc-300 lg:block">
-            Leave session
-          </Link>
-        ) : null}
-
         {listenError ? (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
             Join requests may not update live — publish Firestore rules, then reload.

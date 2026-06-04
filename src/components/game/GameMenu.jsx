@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Button from '../ui/Button.jsx'
 
-export default function GameMenu({ sessionCode }) {
+export default function GameMenu({ sessionCode, onLeave }) {
   const [open, setOpen] = useState(false)
   const [panel, setPanel] = useState(null)
   const [copied, setCopied] = useState(false)
@@ -85,6 +85,26 @@ export default function GameMenu({ sessionCode }) {
                 {copied ? 'Copied!' : 'Copy code'}
               </Button>
             </div>
+          ) : panel === 'leave' ? (
+            <div className="p-4">
+              <button
+                type="button"
+                className="mb-3 text-xs text-zinc-500 hover:text-zinc-300"
+                onClick={() => setPanel(null)}
+              >
+                ← Back
+              </button>
+              <p className="text-sm text-zinc-200">Leave this session?</p>
+              <p className="mt-2 text-xs text-zinc-500">Your progress stays on the table.</p>
+              <div className="mt-4 flex gap-2">
+                <Button variant="secondary" className="flex-1 text-sm" onClick={() => setPanel(null)}>
+                  Stay
+                </Button>
+                <Button className="flex-1 text-sm" onClick={() => onLeave?.()}>
+                  Leave
+                </Button>
+              </div>
+            </div>
           ) : (
             <ul className="py-1 text-sm">
               <li>
@@ -103,6 +123,15 @@ export default function GameMenu({ sessionCode }) {
                   onClick={() => setPanel('settings')}
                 >
                   Settings
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  className="flex w-full px-4 py-3 text-left text-red-300 hover:bg-white/5"
+                  onClick={() => setPanel('leave')}
+                >
+                  Leave session
                 </button>
               </li>
               <li className="border-t border-white/10">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { SAR_INFO } from '../../constants/game.js'
+import { ROUND_STATUS, SAR_INFO } from '../../constants/game.js'
 import { calculateRoundPoints, isTrumpCard } from '../../lib/gameLogic.js'
 import { getSeatHandCount, getSeatPositions, orderPlayersForTable } from '../../lib/seatLayout.js'
 import Button from '../ui/Button.jsx'
@@ -67,7 +67,6 @@ export default function GameTable({
   const seatPositions = getSeatPositions(seated.length)
   const sarInfo = sar ? SAR_INFO[sar] : null
   const reducedMotion = usePrefersReducedMotion()
-  const [leaveConfirm, setLeaveConfirm] = useState(false)
 
   const centerCards = trickReveal?.cards?.length ? trickReveal.cards : (cardsOnTable ?? [])
   const trickWinnerId = trickReveal?.winnerId
@@ -125,7 +124,7 @@ export default function GameTable({
           </div>
           <div className="flex items-center gap-2">
             {sarInfo ? <SarBadge sar={sar} compact /> : null}
-            {sessionCode ? <GameMenu sessionCode={sessionCode} /> : null}
+            {sessionCode ? <GameMenu sessionCode={sessionCode} onLeave={onLeave} /> : null}
           </div>
         </div>
 
@@ -151,12 +150,12 @@ export default function GameTable({
                   player={player}
                   isTurn={isTurn}
                   isTrickWinner={isTrickWinner}
-                  isLocal={false}
                   showRoundScores={showRoundScores}
                   roundPts={roundPts}
                   handCount={handCount}
                   receivingDeal={receivingDeal}
                   tablePhase={tablePhase}
+                  roundStatus={round?.status}
                 />
               </div>
             )
@@ -305,6 +304,11 @@ export default function GameTable({
                 <span className="text-[10px] text-emerald-200/60">
                   {localPlayer.tricksWon ?? 0} won
                 </span>
+                {round?.status === ROUND_STATUS.CALLING || round?.status === ROUND_STATUS.PLAYING ? (
+                  <span className="text-[10px] font-medium text-amber-200/90">
+                    · Call {localPlayer.call != null ? localPlayer.call : '—'}
+                  </span>
+                ) : null}
                 {localHandCount > 0 && !showRoundScores ? (
                   <span className="text-[10px] text-emerald-200/50">· {localHandCount} cards</span>
                 ) : null}
@@ -345,39 +349,18 @@ export default function GameTable({
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-3 flex flex-col gap-2 sm:flex-row"
+          className="mt-3"
         >
           {isOwner ? (
-            <Button className="flex-1" disabled={busy} onClick={onNextRound}>
+            <Button className="w-full" disabled={busy} onClick={onNextRound}>
               Next round
             </Button>
           ) : (
-            <p className="flex-1 rounded-xl bg-surface-raised px-3 py-2.5 text-center text-xs text-muted">
+            <p className="rounded-xl bg-surface-raised px-3 py-2.5 text-center text-xs text-muted">
               Waiting for host to start next round…
             </p>
           )}
-          <Button variant="secondary" className="flex-1" onClick={() => setLeaveConfirm(true)}>
-            Leave session
-          </Button>
         </motion.div>
-      ) : null}
-
-      {leaveConfirm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-surface-raised p-5 shadow-xl">
-            <p className="text-center text-sm text-text">
-              Leave this session? Your progress stays on the table.
-            </p>
-            <div className="mt-4 flex gap-2">
-              <Button variant="secondary" className="flex-1" onClick={() => setLeaveConfirm(false)}>
-                Stay
-              </Button>
-              <Button className="flex-1" onClick={() => onLeave?.()}>
-                Leave
-              </Button>
-            </div>
-          </div>
-        </div>
       ) : null}
     </section>
   )
