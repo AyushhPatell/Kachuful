@@ -223,7 +223,7 @@ export default function GameTable({
                               scale: 0.6,
                             }
                       }
-                      transition={{ duration: 0.35 }}
+                      transition={{ duration: 0.45, ease: 'easeOut' }}
                       className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
                     >
                       <PlayingCard faceDown small />

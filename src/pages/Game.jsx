@@ -26,7 +26,7 @@ import { ROUND_STATUS } from '../constants/game.js'
 
 const TRICK_PAUSE_MS = 1200
 const COLLECT_MS = 700
-const DEAL_CARD_MS = 100
+const DEAL_CARD_MS = 420
 
 export default function Game() {
   const { code } = useParams()
