@@ -6,6 +6,7 @@ import GameTable from '../components/game/GameTable.jsx'
 import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useJoinRequests } from '../hooks/useJoinRequests.js'
+import { useLeaveSession } from '../hooks/useLeaveSession.js'
 import {
   acceptJoinRequest,
   acknowledgeTrickReveal,
@@ -33,6 +34,7 @@ const PLAY_FLY_MS = 400
 export default function Game() {
   const { code } = useParams()
   const navigate = useNavigate()
+  const leaveSession = useLeaveSession(code)
   const { userId, photoURL: authPhotoURL } = useAuth()
   const currentUserId = userId
 
@@ -400,7 +402,7 @@ export default function Game() {
           busy={busy}
           scoresReady={scoresReady}
           onNextRound={handleNextRound}
-          onLeave={() => navigate('/')}
+          onLeave={leaveSession}
           dealStep={dealStep}
           dealTargetPlayerId={dealTargetPlayerId}
           dealSequence={dealSequence}
@@ -422,9 +424,13 @@ export default function Game() {
         ) : null}
 
         {!isSpectator && tablePhase !== 'round-scores' ? (
-          <Link to="/" className="hidden text-center text-xs text-zinc-500 hover:text-zinc-300 lg:block">
+          <button
+            type="button"
+            className="hidden w-full text-center text-xs text-zinc-500 hover:text-zinc-300 lg:block"
+            onClick={leaveSession}
+          >
             Leave session
-          </Link>
+          </button>
         ) : null}
 
         {listenError ? (
