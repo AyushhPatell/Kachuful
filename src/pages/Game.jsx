@@ -6,7 +6,7 @@ import GameTable from '../components/game/GameTable.jsx'
 import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useJoinRequests } from '../hooks/useJoinRequests.js'
-import { PLAY_FLY_MS, useTablePhase } from '../hooks/useTablePhase.js'
+import { useLeaveSession } from '../hooks/useLeaveSession.js'
 import {
   acceptJoinRequest,
   advanceToNextRound,
@@ -28,6 +28,7 @@ import { ROUND_STATUS } from '../constants/game.js'
 export default function Game() {
   const { code } = useParams()
   const navigate = useNavigate()
+  const leaveSession = useLeaveSession(code)
   const { userId, photoURL: authPhotoURL } = useAuth()
   const currentUserId = userId
 
@@ -287,60 +288,90 @@ export default function Game() {
             compact
           />
         </div>
-      ) : null}
 
-      {isSpectator ? (
-        <p className="z-20 shrink-0 bg-zinc-900/80 px-3 py-1.5 text-center text-xs text-zinc-400">
-          Spectator — you will play from the next round.
-        </p>
-      ) : null}
+        {isOwner && joinRequests.length > 0 ? (
+          <div className="space-y-2">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-xs text-amber-200">
+              {joinRequests.length} join request{joinRequests.length === 1 ? '' : 's'}
+            </div>
+            <JoinRequestsPanel
+              joinRequests={joinRequests}
+              newRequestPing={newRequestPing}
+              onAccept={handleAcceptJoin}
+              onReject={handleRejectJoin}
+              compact
+            />
+          </div>
+        ) : null}
 
-      <GameTable
-        className="min-h-0 flex-1"
-        players={players}
-        turnOrder={session?.turnOrder ?? []}
-        cardsOnTable={session?.cardsOnTable}
-        trickReveal={trickReveal}
-        tablePhase={tablePhase}
-        round={round}
-        roundNumber={roundNumber}
-        sar={sar}
-        cardsPerRound={cardsPerRound}
-        currentTurn={session?.currentTurn}
-        currentUserId={currentUserId}
-        isOwner={isOwner}
-        busy={busy}
-        scoresReady={scoresReady}
-        onNextRound={handleNextRound}
-        onLeave={() => navigate('/')}
-        dealStep={dealStep}
-        dealTargetPlayerId={dealTargetPlayerId}
-        dealSequence={dealSequence}
-        me={me}
-        handVisible={handVisible}
-        visibleHandCount={visibleHandCount}
-        playableCards={playableCards}
-        onPlayCard={handlePlayCard}
-        flyPlay={flyPlay}
-        authPhotoURL={authPhotoURL}
-        sessionCode={code}
-        turnMessage={turnMessage}
-        isMyTurn={isMyTurn && (playingPhase || callingPhase)}
-        sortedHand={sortedHand}
-        callingPhase={callingPhase}
-      />
+        {isSpectator ? (
+          <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-center text-xs text-zinc-400">
+            {pendingJoin && !me
+              ? 'Watching — ask the host to accept you for the next round.'
+              : 'Spectator — you will play from the next round.'}
+          </div>
+        ) : null}
 
-      {error ? (
-        <p className="absolute bottom-24 inset-x-4 z-30 rounded-lg bg-red-950/90 px-3 py-2 text-center text-xs text-red-100">
-          {error}
-        </p>
-      ) : null}
+        <GameTable
+          className="flex-1"
+          players={players}
+          turnOrder={session?.turnOrder ?? []}
+          cardsOnTable={session?.cardsOnTable}
+          trickReveal={trickReveal}
+          tablePhase={tablePhase}
+          round={round}
+          roundNumber={roundNumber}
+          sar={sar}
+          cardsPerRound={cardsPerRound}
+          currentTurn={session?.currentTurn}
+          currentUserId={currentUserId}
+          isOwner={isOwner}
+          busy={busy}
+          scoresReady={scoresReady}
+          onNextRound={handleNextRound}
+          onLeave={leaveSession}
+          dealStep={dealStep}
+          dealTargetPlayerId={dealTargetPlayerId}
+          dealSequence={dealSequence}
+          me={me}
+          handVisible={handVisible}
+          visibleHandCount={visibleHandCount}
+          playableCards={playableCards}
+          onPlayCard={handlePlayCard}
+          flyPlay={flyPlay}
+          authPhotoURL={authPhotoURL}
+          sessionCode={code}
+          turnMessage={turnMessage}
+          isMyTurn={isMyTurn && (playingPhase || callingPhase)}
+          sortedHand={sortedHand}
+        />
 
-      {listenError ? (
-        <p className="absolute bottom-36 inset-x-4 z-30 text-center text-xs text-amber-200">
-          Join requests may not update live.
-        </p>
-      ) : null}
+        {showCallPicker ? (
+          <div className="hidden lg:block">{callPicker}</div>
+        ) : null}
+
+        {!isSpectator && tablePhase !== 'round-scores' ? (
+          <button
+            type="button"
+            className="hidden w-full text-center text-xs text-zinc-500 hover:text-zinc-300 lg:block"
+            onClick={leaveSession}
+          >
+            Leave session
+          </button>
+        ) : null}
+
+        {listenError ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            Join requests may not update live — publish Firestore rules, then reload.
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+            {error}
+          </div>
+        ) : null}
+      </div>
 
       <BottomSheet
         open={callSheetOpen && showCallPicker}
