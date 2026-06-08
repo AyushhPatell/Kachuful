@@ -13,6 +13,7 @@ export default function SeatPod({
   receivingDeal,
   tablePhase,
   roundStatus,
+  callingPhase,
 }) {
   const showCall =
     roundStatus === ROUND_STATUS.CALLING || roundStatus === ROUND_STATUS.PLAYING
@@ -24,7 +25,7 @@ export default function SeatPod({
           isTrickWinner
             ? 'bg-amber-400/25 ring-2 ring-amber-300/90 shadow-lg shadow-amber-500/20'
             : isTurn && !showRoundScores
-              ? 'bg-amber-500/15 ring-2 ring-amber-400/50'
+              ? 'bg-amber-500/20 ring-2 ring-amber-400/55 shadow-md shadow-amber-500/10'
               : receivingDeal
                 ? 'bg-white/10 ring-1 ring-white/30'
                 : 'bg-black/20 ring-1 ring-white/10'

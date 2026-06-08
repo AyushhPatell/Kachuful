@@ -4,12 +4,12 @@ import PlayingCard from './PlayingCard.jsx'
 /** How much each card overlaps the previous (px) — tighter = more natural fan. */
 const OVERLAP_BY_COUNT = {
   1: 0,
-  2: 26,
-  3: 24,
-  4: 22,
-  5: 20,
-  6: 18,
-  7: 16,
+  2: 22,
+  3: 20,
+  4: 18,
+  5: 16,
+  6: 14,
+  7: 12,
 }
 
 const ROTATE_BY_COUNT = {
@@ -56,7 +56,6 @@ export default function HandFan({
         return (
           <motion.div
             key={card.id}
-            layoutId={showFace ? `card-${card.id}` : undefined}
             className="shrink-0"
             style={{
               marginLeft: index === 0 ? 0 : -overlap,

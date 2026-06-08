@@ -61,6 +61,7 @@ export default function GameTable({
   turnMessage,
   isMyTurn,
   sortedHand = [],
+  callingPhase = false,
   className = '',
 }) {
   const seated = orderPlayersForTable(players, turnOrder, currentUserId)
@@ -114,8 +115,8 @@ export default function GameTable({
     : 0
 
   return (
-    <section className={`relative ${className}`}>
-      <TableSurface>
+    <section className={`relative flex flex-col ${className}`}>
+      <TableSurface className="h-full min-h-0 flex-1">
         {/* HUD on felt */}
         <div className="absolute left-0 right-0 top-3 z-20 flex items-start justify-between gap-2 px-3 sm:px-4">
           <div className="rounded-full bg-black/25 px-3 py-1 text-[11px] font-medium text-emerald-100/90 backdrop-blur-sm">
@@ -150,6 +151,7 @@ export default function GameTable({
                   player={player}
                   isTurn={isTurn}
                   isTrickWinner={isTrickWinner}
+                  callingPhase={callingPhase}
                   showRoundScores={showRoundScores}
                   roundPts={roundPts}
                   handCount={handCount}
@@ -195,9 +197,7 @@ export default function GameTable({
                 if (isFlyingHere) return null
                 return (
                   <motion.div
-                    key={`${play.userId}-${play.card.id}`}
-                    layoutId={`card-${play.card.id}`}
-                    layout={!isTrickPhase && !isCollect}
+                    key={`${trickReveal?.at ?? 't'}-${play.userId}-${play.card.id}`}
                     initial={reducedMotion ? false : { scale: 0.75, opacity: 0, y: 14 }}
                     animate={cardAnimate(play)}
                     className={`text-center ${
@@ -279,7 +279,7 @@ export default function GameTable({
               transition={{ duration: reducedMotion ? 0.05 : 0.42, ease: 'easeOut' }}
               className="pointer-events-none absolute left-1/2 top-[42%] z-30 -translate-x-1/2 -translate-y-1/2"
             >
-              <PlayingCard card={flyPlay.card} small layoutId={`card-${flyPlay.card.id}`} />
+              <PlayingCard card={flyPlay.card} small />
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -290,7 +290,9 @@ export default function GameTable({
             <div className="mb-1 flex flex-col items-center">
               <div
                 className={`flex items-center gap-2 rounded-full px-3 py-1 ${
-                  currentTurn === localPlayer.id && tablePhase === 'playing'
+                  currentTurn === localPlayer.id &&
+                  (tablePhase === 'playing' || callingPhase) &&
+                  !showRoundScores
                     ? 'bg-amber-500/20 ring-1 ring-amber-400/50'
                     : 'bg-black/20'
                 }`}
@@ -349,7 +351,7 @@ export default function GameTable({
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-3"
+          className="shrink-0 border-t border-white/10 bg-zinc-950/90 p-3"
         >
           {isOwner ? (
             <Button className="w-full" disabled={busy} onClick={onNextRound}>
