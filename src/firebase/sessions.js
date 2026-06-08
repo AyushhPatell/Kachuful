@@ -73,6 +73,15 @@ async function getActivePlayers(code) {
     .sort((a, b) => a.joinOrder - b.joinOrder)
 }
 
+/** Active + spectators (spectators join the table next round). */
+async function getRoundParticipants(code) {
+  const playerDocs = await getDocs(playersCollection(code))
+  return playerDocs.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((p) => p.status === 'active' || p.status === 'spectator')
+    .sort((a, b) => a.joinOrder - b.joinOrder)
+}
+
 function getNextTrickPlayer(turnOrder, handsById, cardsOnTable, afterUserId) {
   const played = new Set(cardsOnTable.map((p) => p.userId))
   const startIdx = turnOrder.indexOf(afterUserId)
@@ -519,6 +528,9 @@ export async function acknowledgeTrickReveal(code) {
   const reveal = session.lastTrickReveal
   if (!reveal) return
 
+  const userId = auth.currentUser?.uid
+  if (reveal.endsRound && session.ownerId !== userId) return
+
   const roundNumber = session.currentRound
 
   await updateDoc(sessionsRef(code), {
@@ -579,7 +591,7 @@ export async function advanceToNextRound(code) {
     throw new Error('This round is not finished yet')
   }
 
-  const activePlayers = await getActivePlayers(code)
+  const activePlayers = await getRoundParticipants(code)
   const maxRound = session.maxRound ?? getMaxRound(activePlayers.length)
   const cycleLength = 2 * maxRound - 1
 

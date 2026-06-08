@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { SAR_INFO } from '../../constants/game.js'
+import { ROUND_STATUS, SAR_INFO } from '../../constants/game.js'
 import { calculateRoundPoints, isTrumpCard } from '../../lib/gameLogic.js'
 import { getSeatHandCount, getSeatPositions, orderPlayersForTable } from '../../lib/seatLayout.js'
 import Button from '../ui/Button.jsx'
@@ -61,13 +61,13 @@ export default function GameTable({
   turnMessage,
   isMyTurn,
   sortedHand = [],
+  callingPhase = false,
   className = '',
 }) {
   const seated = orderPlayersForTable(players, turnOrder, currentUserId)
   const seatPositions = getSeatPositions(seated.length)
   const sarInfo = sar ? SAR_INFO[sar] : null
   const reducedMotion = usePrefersReducedMotion()
-  const [leaveConfirm, setLeaveConfirm] = useState(false)
 
   const centerCards = trickReveal?.cards?.length ? trickReveal.cards : (cardsOnTable ?? [])
   const trickWinnerId = trickReveal?.winnerId
@@ -115,8 +115,8 @@ export default function GameTable({
     : 0
 
   return (
-    <section className={`relative ${className}`}>
-      <TableSurface>
+    <section className={`relative flex flex-col ${className}`}>
+      <TableSurface className="h-full min-h-0 flex-1">
         {/* HUD on felt */}
         <div className="absolute left-0 right-0 top-3 z-20 flex items-start justify-between gap-2 px-3 sm:px-4">
           <div className="rounded-full bg-black/25 px-3 py-1 text-[11px] font-medium text-emerald-100/90 backdrop-blur-sm">
@@ -125,7 +125,7 @@ export default function GameTable({
           </div>
           <div className="flex items-center gap-2">
             {sarInfo ? <SarBadge sar={sar} compact /> : null}
-            {sessionCode ? <GameMenu sessionCode={sessionCode} /> : null}
+            {sessionCode ? <GameMenu sessionCode={sessionCode} onLeave={onLeave} /> : null}
           </div>
         </div>
 
@@ -151,12 +151,13 @@ export default function GameTable({
                   player={player}
                   isTurn={isTurn}
                   isTrickWinner={isTrickWinner}
-                  isLocal={false}
+                  callingPhase={callingPhase}
                   showRoundScores={showRoundScores}
                   roundPts={roundPts}
                   handCount={handCount}
                   receivingDeal={receivingDeal}
                   tablePhase={tablePhase}
+                  roundStatus={round?.status}
                 />
               </div>
             )
@@ -196,9 +197,7 @@ export default function GameTable({
                 if (isFlyingHere) return null
                 return (
                   <motion.div
-                    key={`${play.userId}-${play.card.id}`}
-                    layoutId={`card-${play.card.id}`}
-                    layout={!isTrickPhase && !isCollect}
+                    key={`${trickReveal?.at ?? 't'}-${play.userId}-${play.card.id}`}
                     initial={reducedMotion ? false : { scale: 0.75, opacity: 0, y: 14 }}
                     animate={cardAnimate(play)}
                     className={`text-center ${
@@ -280,7 +279,7 @@ export default function GameTable({
               transition={{ duration: reducedMotion ? 0.05 : 0.42, ease: 'easeOut' }}
               className="pointer-events-none absolute left-1/2 top-[42%] z-30 -translate-x-1/2 -translate-y-1/2"
             >
-              <PlayingCard card={flyPlay.card} small layoutId={`card-${flyPlay.card.id}`} />
+              <PlayingCard card={flyPlay.card} small />
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -291,7 +290,9 @@ export default function GameTable({
             <div className="mb-1 flex flex-col items-center">
               <div
                 className={`flex items-center gap-2 rounded-full px-3 py-1 ${
-                  currentTurn === localPlayer.id && tablePhase === 'playing'
+                  currentTurn === localPlayer.id &&
+                  (tablePhase === 'playing' || callingPhase) &&
+                  !showRoundScores
                     ? 'bg-amber-500/20 ring-1 ring-amber-400/50'
                     : 'bg-black/20'
                 }`}
@@ -305,6 +306,11 @@ export default function GameTable({
                 <span className="text-[10px] text-emerald-200/60">
                   {localPlayer.tricksWon ?? 0} won
                 </span>
+                {round?.status === ROUND_STATUS.CALLING || round?.status === ROUND_STATUS.PLAYING ? (
+                  <span className="text-[10px] font-medium text-amber-200/90">
+                    · Call {localPlayer.call != null ? localPlayer.call : '—'}
+                  </span>
+                ) : null}
                 {localHandCount > 0 && !showRoundScores ? (
                   <span className="text-[10px] text-emerald-200/50">· {localHandCount} cards</span>
                 ) : null}
@@ -345,20 +351,17 @@ export default function GameTable({
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-3 flex flex-col gap-2 sm:flex-row"
+          className="shrink-0 border-t border-white/10 bg-zinc-950/90 p-3"
         >
           {isOwner ? (
-            <Button className="flex-1" disabled={busy} onClick={onNextRound}>
+            <Button className="w-full" disabled={busy} onClick={onNextRound}>
               Next round
             </Button>
           ) : (
-            <p className="flex-1 rounded-xl bg-surface-raised px-3 py-2.5 text-center text-xs text-muted">
+            <p className="rounded-xl bg-surface-raised px-3 py-2.5 text-center text-xs text-muted">
               Waiting for host to start next round…
             </p>
           )}
-          <Button variant="secondary" className="flex-1" onClick={() => setLeaveConfirm(true)}>
-            Leave session
-          </Button>
         </motion.div>
       ) : null}
 
