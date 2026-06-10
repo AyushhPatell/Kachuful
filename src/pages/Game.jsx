@@ -37,7 +37,7 @@ import { EmojiPicker, ReactionFloaters, useEmojiReactions } from '../components/
 
 const TRICK_PAUSE_MS = 1200
 const COLLECT_MS = 700
-const DEAL_CARD_MS = 420
+const DEAL_CARD_MS = 600
 const PLAY_FLY_MS = 400
 
 export default function Game() {
@@ -99,6 +99,13 @@ export default function Game() {
   const trickReveal = session?.lastTrickReveal ?? frozenTrickReveal
   const callingPhase = round?.status === ROUND_STATUS.CALLING && tablePhase === 'playing'
   const playingPhase = round?.status === ROUND_STATUS.PLAYING && tablePhase === 'playing'
+  // Stable primitive deps for the auto-play effect — avoids resetting the
+  // 3-second timer on every heartbeat that causes a new `players` reference.
+  const currentTurnPlayerId = session?.currentTurn ?? null
+  const currentTurnPlayerStatus = useMemo(
+    () => players.find((p) => p.id === currentTurnPlayerId)?.status ?? null,
+    [players, currentTurnPlayerId],
+  )
   const roundComplete = round?.status === ROUND_STATUS.COMPLETE
   const scoresReady = Boolean(round?.results && Object.keys(round.results).length > 0)
   // Show overlay if in round-scores phase OR if we reloaded mid-round-complete (tablePhase reset to 'playing')
@@ -321,22 +328,22 @@ export default function Game() {
   }, [flyPlay?.key])
 
   // ── host auto-play for disconnected players ─────────────────────────────────
+  // Deps use primitive values (string IDs / status strings) instead of the
+  // `players` array so that heartbeat-triggered reference changes don't reset
+  // the 3-second timer before it fires.
   useEffect(() => {
     if (!isOwner || !playingPhase) return undefined
-    const turnPlayerId = session?.currentTurn
-    if (!turnPlayerId || turnPlayerId === currentUserId) return undefined
-    const turnPlayer = players.find((p) => p.id === turnPlayerId)
-    if (!turnPlayer || turnPlayer.status !== 'disconnected') return undefined
-    const hand = turnPlayer.hand ?? []
-    const cardsOnTable = session?.cardsOnTable ?? []
-    const legalCards = getPlayableCards(hand, cardsOnTable)
+    if (!currentTurnPlayerId || currentTurnPlayerId === currentUserId) return undefined
+    if (currentTurnPlayerStatus !== 'disconnected') return undefined
+    const turnPlayer = players.find((p) => p.id === currentTurnPlayerId)
+    const legalCards = getPlayableCards(turnPlayer?.hand ?? [], session?.cardsOnTable ?? [])
     if (legalCards.length === 0) return undefined
     const timer = setTimeout(() => {
       const card = legalCards[Math.floor(Math.random() * legalCards.length)]
-      playCard(code, turnPlayerId, card).catch(() => {})
+      playCard(code, currentTurnPlayerId, card).catch(() => {})
     }, 3000)
     return () => clearTimeout(timer)
-  }, [isOwner, playingPhase, session?.currentTurn, session?.cardsOnTable, players, code, currentUserId])
+  }, [isOwner, playingPhase, currentTurnPlayerId, currentTurnPlayerStatus, code, currentUserId])
 
   // ── auto host-election when host tab closes without clicking Leave ───────────
   // If the host's heartbeat goes stale and I'm the first active player by
@@ -558,11 +565,38 @@ export default function Game() {
         </button>
       ) : null}
 
-      {/* Mobile: opponent calling notice */}
+      {/* Mobile: opponent calling notice — centered pill, leaves emoji button uncovered */}
       {!isSpectator && callingPhase && me?.call == null && !isMyTurn ? (
-        <div className="pointer-events-none absolute inset-x-4 z-30 rounded-full bg-black/50 px-4 py-2 text-center text-xs text-zinc-300 backdrop-blur-sm lg:hidden"
-          style={{ bottom: 'max(7rem, calc(6.5rem + env(safe-area-inset-bottom)))' }}>
+        <div
+          className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/55 px-5 py-2 text-center text-xs text-zinc-300 backdrop-blur-sm lg:hidden"
+          style={{ bottom: 'max(7rem, calc(6.5rem + env(safe-area-inset-bottom)))' }}
+        >
           {currentTurnPlayer?.name ?? 'Opponent'} is calling…
+        </div>
+      ) : null}
+
+      {/* My call/tricks badge — shown during playing phase once I've called */}
+      {!isSpectator && me?.call != null && playingPhase ? (
+        <div
+          className="pointer-events-none absolute right-3 z-30 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-medium backdrop-blur-sm"
+          style={{
+            bottom: 'max(7.5rem, calc(7.5rem + env(safe-area-inset-bottom)))',
+            background: 'rgba(0,0,0,0.52)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        >
+          <span
+            className={`tabular-nums font-bold ${
+              (me.tricksWon ?? 0) >= me.call && me.call > 0
+                ? 'text-emerald-400'
+                : 'text-amber-200'
+            }`}
+          >
+            {me.tricksWon ?? 0}
+          </span>
+          <span className="text-zinc-600">/</span>
+          <span className="tabular-nums text-zinc-400">{me.call}</span>
+          <span className="text-zinc-600">tricks</span>
         </div>
       ) : null}
 
