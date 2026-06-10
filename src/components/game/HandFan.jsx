@@ -4,7 +4,10 @@ import PlayingCard from './PlayingCard.jsx'
 import { playSound } from '../../lib/sounds.js'
 import { isTrumpCard } from '../../lib/gameLogic.js'
 
-const isTouchDevice = typeof window !== 'undefined' && 'ontouchstart' in window
+const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+
+const SUIT_SYMBOLS = { spades: '♠', clubs: '♣', diamonds: '♦', hearts: '♥' }
+const SUIT_COLORS = { spades: '#e2e8f0', clubs: '#e2e8f0', diamonds: '#f87171', hearts: '#f87171' }
 
 export default function HandFan({
   cards,
@@ -21,6 +24,7 @@ export default function HandFan({
   sar,
 }) {
   const [selectedId, setSelectedId] = useState(null)
+  const [hoveredId, setHoveredId] = useState(null)
 
   // Must be before any early returns (Rules of Hooks)
   const handleCardClick = useCallback((card, canPlay) => {
@@ -109,17 +113,34 @@ export default function HandFan({
           <motion.div
             key={card.id}
             className="absolute bottom-0 origin-bottom"
-            style={{ zIndex: isSelected ? count + 5 : index }}
-            // All transforms in animate so framer-motion manages them consistently
+            style={{ zIndex: isSelected || hoveredId === card.id ? count + 5 : index }}
             initial={reducedMotion ? false : { opacity: 0, y: 50, scale: 0.85, x: tx, rotate: rot }}
             animate={{ opacity: 1, y: liftY, scale: cardScale, x: tx, rotate: rot }}
             transition={{ type: 'spring', stiffness: 300, damping: 26 }}
+            onMouseEnter={() => !isTouchDevice && canPlay && setHoveredId(card.id)}
+            onMouseLeave={() => !isTouchDevice && setHoveredId(null)}
           >
+            {/* Desktop hover tooltip */}
+            {!isTouchDevice && hoveredId === card.id && canPlay && showFace && (
+              <div
+                className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                style={{
+                  bottom: 'calc(100% + 6px)',
+                  background: 'rgba(0,0,0,0.82)',
+                  border: '1px solid rgba(255,255,255,0.14)',
+                  backdropFilter: 'blur(4px)',
+                  color: SUIT_COLORS[card.suit] ?? '#e2e8f0',
+                  zIndex: count + 10,
+                }}
+              >
+                {card.rank}{SUIT_SYMBOLS[card.suit] ?? card.suit}
+              </div>
+            )}
             <PlayingCard
               card={faceDown ? null : card}
               faceDown={faceDown || !showFace}
               onClick={canPlay ? () => handleCardClick(card, canPlay) : undefined}
-              selected={isSelected || (canPlay && !isTouchDevice)}
+              selected={isSelected || (canPlay && !isTouchDevice && hoveredId === card.id)}
               isTrump={showFace && isTrumpCard(card, sar)}
               hand
             />

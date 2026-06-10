@@ -1,15 +1,21 @@
 {
   "name": "Kachuful",
   "short_name": "Kachuful",
+  "description": "Online multiplayer trick-taking card game",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#09090b",
   "theme_color": "#09090b",
+  "categories": ["games", "entertainment"],
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "screenshots": []
 }

@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useJoinRequests } from '../hooks/useJoinRequests.js'
 import {
   acceptJoinRequest,
+  checkAndExpireLobby,
   hasPendingJoinRequest,
   isAcceptedPlayer,
   rejectJoinRequest,
@@ -19,35 +20,75 @@ import { unlockAudio } from '../lib/sounds.js'
 
 function SessionCodeDisplay({ code }) {
   const [copied, setCopied] = useState(false)
-  function handleCopy() {
-    navigator.clipboard?.writeText(code)
+  const [showFallback, setShowFallback] = useState(false)
+
+  async function handleCopy() {
+    let success = false
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(code)
+        success = true
+      } catch {
+        // Clipboard API blocked (iOS Safari, etc.)
+      }
+    }
+    if (!success) {
+      // Fallback: select the hidden input so user can copy manually
+      setShowFallback(true)
+      return
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 2200)
   }
+
   return (
     <div
-      className="flex items-center justify-center gap-4 rounded-2xl px-5 py-4"
+      className="flex flex-col gap-3 rounded-2xl px-5 py-4"
       style={{
         background: 'rgba(201,150,58,0.1)',
         border: '1px solid rgba(201,150,58,0.25)',
       }}
     >
-      <div>
-        <p className="mb-1 text-[10px] uppercase tracking-[0.2em] text-amber-500/70">Session Code</p>
-        <p
-          className="font-mono text-4xl font-bold tracking-[0.28em] text-amber-300"
-          style={{ fontFamily: 'Cinzel, serif' }}
+      <div className="flex items-center justify-center gap-4">
+        <div>
+          <p className="mb-1 text-[10px] uppercase tracking-[0.2em] text-amber-500/70">Session Code</p>
+          <p
+            className="font-mono text-4xl font-bold tracking-[0.28em] text-amber-300"
+            style={{ fontFamily: 'Cinzel, serif' }}
+          >
+            {code}
+          </p>
+        </div>
+        <button
+          onClick={handleCopy}
+          className="rounded-xl px-3 py-2 text-xs font-medium text-zinc-300 transition-all hover:text-white"
+          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
         >
-          {code}
-        </p>
+          {copied ? '✓ Copied!' : 'Copy'}
+        </button>
       </div>
-      <button
-        onClick={handleCopy}
-        className="rounded-xl px-3 py-2 text-xs font-medium text-zinc-300 transition-all hover:text-white"
-        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
-      >
-        {copied ? '✓ Copied!' : 'Copy'}
-      </button>
+
+      {/* Fallback selectable input for browsers that block clipboard API */}
+      {showFallback && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-center text-[10px] text-zinc-500">
+            Tap and hold to copy the code manually:
+          </p>
+          <input
+            readOnly
+            value={code}
+            onFocus={e => e.target.select()}
+            className="w-full rounded-lg bg-black/40 px-3 py-2 text-center font-mono text-lg font-bold tracking-widest text-amber-300 outline-none"
+            style={{ border: '1px solid rgba(201,150,58,0.3)' }}
+          />
+          <button
+            onClick={() => setShowFallback(false)}
+            className="text-center text-[10px] text-zinc-600 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -72,6 +113,20 @@ export default function Lobby() {
     return () => { unsubSession(); unsubPlayers() }
   }, [code])
 
+  // Expire idle lobbies on the client side
+  useEffect(() => {
+    if (!session || session.status !== 'lobby') return undefined
+    const expiresAt = session.lobbyExpiresAt
+    if (!expiresAt) return undefined
+    const msLeft = expiresAt - Date.now()
+    if (msLeft <= 0) {
+      checkAndExpireLobby(code).catch(() => {})
+      return undefined
+    }
+    const t = setTimeout(() => checkAndExpireLobby(code).catch(() => {}), msLeft)
+    return () => clearTimeout(t)
+  }, [code, session?.status, session?.lobbyExpiresAt])
+
   const isPlayer = isAcceptedPlayer(players, currentUserId)
   const pendingJoin = hasPendingJoinRequest(session, currentUserId) || pendingFromSubcollection
 
@@ -84,6 +139,8 @@ export default function Lobby() {
     if (session?.status === 'active' && (isPlayer || pendingJoin)) navigate(`/game/${code}`)
     if (session?.status === 'ended' && isPlayer) navigate(`/leaderboard/${code}`)
   }, [session?.status, isPlayer, pendingJoin, code, navigate])
+
+  const lobbyExpired = session?.status === 'ended' && !session?.currentRound
 
   async function handleStart() {
     unlockAudio()
@@ -195,6 +252,12 @@ export default function Lobby() {
           )}
         </ul>
       </div>
+
+      {lobbyExpired && (
+        <p className="rounded-xl bg-red-500/10 px-4 py-3 text-center text-sm text-red-300">
+          This lobby has expired. Please start a new session.
+        </p>
+      )}
 
       {!isOwner && pendingJoin && session?.status === 'lobby' && (
         <p className="rounded-xl bg-white/5 px-4 py-3 text-center text-sm text-zinc-400">

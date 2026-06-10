@@ -17,6 +17,8 @@ export default function SeatPod({
 }) {
   const isCalling = callingPhase && isTurn
   const isActive = isTurn && !showRoundScores
+  const isSpectator = player.status === 'spectator'
+  const isDisconnected = player.status === 'disconnected'
 
   return (
     <div className="flex flex-col items-center gap-1" style={{ width: compact ? 76 : 94 }}>
@@ -27,7 +29,11 @@ export default function SeatPod({
         animate={isActive ? { scale: [1, 1.025, 1] } : { scale: 1 }}
         transition={{ duration: 1.6, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
         style={{
-          background: isTrickWinner
+          background: isDisconnected
+            ? 'rgba(100,100,100,0.18)'
+            : isSpectator
+            ? 'rgba(60,80,255,0.1)'
+            : isTrickWinner
             ? 'rgba(251,191,36,0.18)'
             : isActive
             ? 'rgba(245,158,11,0.14)'
@@ -35,7 +41,11 @@ export default function SeatPod({
             ? 'rgba(255,255,255,0.07)'
             : 'rgba(0,0,0,0.42)',
           backdropFilter: 'blur(8px)',
-          border: isTrickWinner
+          border: isDisconnected
+            ? '1px dashed rgba(255,255,255,0.18)'
+            : isSpectator
+            ? '1px solid rgba(99,102,241,0.35)'
+            : isTrickWinner
             ? '1.5px solid rgba(251,191,36,0.65)'
             : isActive
             ? '1.5px solid rgba(245,158,11,0.55)'
@@ -45,9 +55,25 @@ export default function SeatPod({
             : isTrickWinner
             ? '0 0 18px rgba(251,191,36,0.35), 0 4px 14px rgba(0,0,0,0.4)'
             : '0 4px 14px rgba(0,0,0,0.4)',
-          transition: 'background 0.3s, border 0.3s, box-shadow 0.3s',
+          opacity: isDisconnected ? 0.55 : 1,
+          transition: 'background 0.3s, border 0.3s, box-shadow 0.3s, opacity 0.3s',
         }}
       >
+        {/* Disconnected / spectator badge */}
+        {(isDisconnected || isSpectator) && (
+          <div
+            className="absolute -left-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full text-[9px]"
+            style={{
+              background: isDisconnected ? 'rgba(80,80,80,0.9)' : 'rgba(99,102,241,0.85)',
+              border: '1.5px solid rgba(255,255,255,0.3)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.45)',
+            }}
+            title={isDisconnected ? 'Offline' : 'Spectating'}
+          >
+            {isDisconnected ? '✕' : '👁'}
+          </div>
+        )}
+
         {/* Dealer chip */}
         {isDealer && (
           <div
