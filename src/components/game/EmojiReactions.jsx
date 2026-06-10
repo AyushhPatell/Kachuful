@@ -116,7 +116,7 @@ export function EmojiPicker({ sessionCode, userId, disabled }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.85, y: 4 }}
             transition={{ type: 'spring', stiffness: 420, damping: 26 }}
-            className="absolute bottom-full right-0 mb-2 flex gap-1.5 rounded-2xl p-2"
+            className="absolute bottom-full left-0 mb-2 flex gap-1.5 rounded-2xl p-2"
             style={{
               background: 'rgba(20,24,19,0.95)',
               border: '1px solid rgba(255,255,255,0.12)',

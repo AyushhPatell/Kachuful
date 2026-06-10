@@ -256,9 +256,7 @@ export default function Game() {
   useEffect(() => {
     if (!currentUserId || !code || !me) return undefined
     function handleVisibilityChange() {
-      if (document.visibilityState === 'hidden') {
-        markPlayerDisconnected(code, currentUserId).catch(() => {})
-      } else {
+      if (document.visibilityState === 'visible') {
         pingPresence(code, currentUserId).catch(() => {})
       }
     }
@@ -507,8 +505,9 @@ export default function Game() {
       {showCallPicker && !callSheetOpen ? (
         <button
           onClick={() => setCallSheetOpen(true)}
-          className="absolute bottom-[6rem] left-1/2 z-30 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg lg:hidden"
+          className="absolute left-1/2 z-30 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg lg:hidden"
           style={{
+            bottom: 'max(9rem, calc(8rem + env(safe-area-inset-bottom)))',
             background: 'linear-gradient(135deg, #f59e0b, #d97706)',
             boxShadow: '0 4px 20px rgba(245,158,11,0.45)',
           }}
@@ -525,7 +524,14 @@ export default function Game() {
 
       {/* Desktop call panel */}
       {showCallPicker ? (
-        <div className="absolute bottom-4 inset-x-4 z-20 hidden max-w-md lg:mx-auto lg:block lg:left-1/2 lg:-translate-x-1/2">
+        <div
+          className="absolute bottom-4 inset-x-4 z-20 hidden max-w-md rounded-2xl lg:mx-auto lg:block lg:left-1/2 lg:-translate-x-1/2"
+          style={{
+            background: 'linear-gradient(160deg, #1c201a, #111410)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 16px 48px rgba(0,0,0,0.75)',
+          }}
+        >
           {callPicker}
         </div>
       ) : null}
