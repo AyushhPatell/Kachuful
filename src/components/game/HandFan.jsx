@@ -22,14 +22,7 @@ export default function HandFan({
 }) {
   const [selectedId, setSelectedId] = useState(null)
 
-  const visible = cards.slice(0, visibleCount)
-  if (!visible.length) return null
-
-  const count = visible.length
-  const center = (count - 1) / 2
-  const stepDeg = count === 1 ? 0 : count === 2 ? 11 : count <= 4 ? 9 : count <= 6 ? 7 : 5.5
-  const stepPx  = count === 1 ? 0 : count === 2 ? 30 : count <= 4 ? 34 : count <= 6 ? 28 : 22
-
+  // useCallback must be declared before any early returns to satisfy Rules of Hooks
   const handleCardClick = useCallback((card, canPlay) => {
     if (!canPlay) return
     if (isTouchDevice) {
@@ -48,6 +41,14 @@ export default function HandFan({
       onPlayCard(card)
     }
   }, [selectedId, onPlayCard])
+
+  const visible = cards.slice(0, visibleCount)
+  if (!visible.length) return null
+
+  const count = visible.length
+  const center = (count - 1) / 2
+  const stepDeg = count === 1 ? 0 : count === 2 ? 11 : count <= 4 ? 9 : count <= 6 ? 7 : 5.5
+  const stepPx  = count === 1 ? 0 : count === 2 ? 30 : count <= 4 ? 34 : count <= 6 ? 28 : 22
 
   return (
     <div
