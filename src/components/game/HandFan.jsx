@@ -47,8 +47,8 @@ export default function HandFan({
 
   const count = visible.length
   const center = (count - 1) / 2
-  const stepDeg = count === 1 ? 0 : count === 2 ? 11 : count <= 4 ? 9 : count <= 6 ? 7 : 5.5
-  const stepPx  = count === 1 ? 0 : count === 2 ? 30 : count <= 4 ? 34 : count <= 6 ? 28 : 22
+  const stepDeg = count === 1 ? 0 : count === 2 ? 13 : count <= 4 ? 11 : count <= 6 ? 8.5 : 6.5
+  const stepPx  = count === 1 ? 0 : count === 2 ? 62 : count <= 3 ? 52 : count <= 5 ? 42 : count <= 7 ? 32 : 25
 
   return (
     <div

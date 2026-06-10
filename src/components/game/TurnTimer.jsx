@@ -1,59 +1,110 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { isMuted, playSound } from '../../lib/sounds.js'
 
-const TURN_SECONDS = 30
+const DEFAULT_SECONDS = 40
+const URGENT_THRESHOLD = 10
 
-export default function TurnTimer({ isActive, resetKey }) {
-  const [remaining, setRemaining] = useState(TURN_SECONDS)
+export default function TurnTimer({ isActive, resetKey, totalSeconds = DEFAULT_SECONDS, onExpire }) {
+  const [remaining, setRemaining] = useState(totalSeconds)
+  const expiredRef = useRef(false)
+  const lastTickRef = useRef(null)
 
+  // Reset and run the countdown
   useEffect(() => {
-    setRemaining(TURN_SECONDS)
+    expiredRef.current = false
+    lastTickRef.current = null
+    setRemaining(totalSeconds)
     if (!isActive) return undefined
-    const interval = setInterval(() => {
-      setRemaining(prev => (prev <= 1 ? 0 : prev - 1))
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [isActive, resetKey])
 
-  const progress = remaining / TURN_SECONDS
-  const isUrgent = remaining <= 10
-  const circumference = 2 * Math.PI * 11
+    const interval = setInterval(() => {
+      setRemaining(prev => {
+        if (prev <= 1) return 0
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [isActive, resetKey, totalSeconds])
+
+  // Fire onExpire exactly once when hitting 0
+  useEffect(() => {
+    if (remaining === 0 && isActive && !expiredRef.current) {
+      expiredRef.current = true
+      onExpire?.()
+    }
+  }, [remaining, isActive, onExpire])
+
+  // Tick sound every second during last URGENT_THRESHOLD seconds
+  useEffect(() => {
+    if (!isActive) return
+    if (remaining <= 0 || remaining > URGENT_THRESHOLD) return
+    if (lastTickRef.current === remaining) return // already ticked this second
+    lastTickRef.current = remaining
+    if (!isMuted()) playSound('tick')
+  }, [remaining, isActive])
+
+  const progress = remaining / totalSeconds
+  const isUrgent = remaining <= URGENT_THRESHOLD && isActive
+  const circumference = 2 * Math.PI * 13
+
+  const trackColor = 'rgba(255,255,255,0.1)'
+  const arcColor = isUrgent ? '#f87171' : '#f59e0b'
 
   return (
     <AnimatePresence>
       {isActive && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
+          initial={{ opacity: 0, scale: 0.75 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.7 }}
           transition={{ duration: 0.2 }}
         >
-          <svg width="30" height="30" className="overflow-visible">
+          {/* Urgent flash ring */}
+          <AnimatePresence>
+            {isUrgent && (
+              <motion.div
+                key="urgent-ring"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 0.55, 0] }}
+                transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+                className="absolute inset-0 rounded-full"
+                style={{ boxShadow: '0 0 12px 4px rgba(248,113,113,0.65)' }}
+              />
+            )}
+          </AnimatePresence>
+
+          <svg width="34" height="34" className="relative overflow-visible">
             {/* Track */}
             <circle
-              cx="15" cy="15" r="11"
+              cx="17" cy="17" r="13"
               fill="none"
-              stroke="rgba(255,255,255,0.1)"
+              stroke={trackColor}
               strokeWidth="2.5"
             />
             {/* Progress arc */}
             <circle
-              cx="15" cy="15" r="11"
+              cx="17" cy="17" r="13"
               fill="none"
-              stroke={isUrgent ? '#f87171' : '#f59e0b'}
+              stroke={arcColor}
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={circumference * (1 - progress)}
-              transform="rotate(-90 15 15)"
-              style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.3s' }}
+              transform="rotate(-90 17 17)"
+              style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s' }}
             />
-            {/* Number */}
+            {/* Countdown number */}
             <text
-              x="15" y="19"
+              x="17" y="21.5"
               textAnchor="middle"
-              fill={isUrgent ? '#f87171' : '#f59e0b'}
-              style={{ fontSize: 8, fontWeight: 700, fontFamily: 'Inter, sans-serif' }}
+              fill={arcColor}
+              style={{
+                fontSize: remaining >= 10 ? 8.5 : 9.5,
+                fontWeight: 700,
+                fontFamily: 'Inter, sans-serif',
+                transition: 'fill 0.3s',
+              }}
             >
               {remaining}
             </text>

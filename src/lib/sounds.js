@@ -155,6 +155,14 @@ const SOUNDS = {
     osc(ac, 'sine', 1100, t + 0.16, 0.18, 0.14)
   },
 
+  /** Clock tick — countdown urgency */
+  tick() {
+    const ac = getCtx(); if (!ac) return
+    const t = ac.currentTime
+    osc(ac, 'sine', 1400, t, 0.03, 0.10)
+    osc(ac, 'sine', 900,  t + 0.012, 0.025, 0.04)
+  },
+
   /** Low thud — missed call */
   fail() {
     const ac = getCtx(); if (!ac) return
