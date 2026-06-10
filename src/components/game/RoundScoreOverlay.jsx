@@ -35,7 +35,7 @@ export default function RoundScoreOverlay({
   const endVoteCount = Object.values(votes).filter(v => v === 'end').length
   const continueVoteCount = Object.values(votes).filter(v => v === 'continue').length
   const totalVoters = activePlayers.length
-  const majority = Math.ceil(totalVoters / 2)
+  const majority = Math.floor(totalVoters / 2) + 1
   const votePassed = endVoteCount >= majority
   const voteFailed = continueVoteCount > totalVoters - majority
 

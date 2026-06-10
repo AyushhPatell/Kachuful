@@ -12,7 +12,9 @@ import {
   acceptJoinRequest,
   acknowledgeTrickReveal,
   advanceToNextRound,
+  claimHostRole,
   hasPendingJoinRequest,
+  isPlayerOffline,
   kickPlayer,
   markPlayerDisconnected,
   pingPresence,
@@ -41,9 +43,9 @@ const PLAY_FLY_MS = 400
 export default function Game() {
   const { code } = useParams()
   const navigate = useNavigate()
-  const leaveSession = useLeaveSession()
   const { userId, photoURL: authPhotoURL } = useAuth()
   const currentUserId = userId
+  const leaveSession = useLeaveSession(code, currentUserId)
 
   const [session, setSession] = useState(null)
   const [players, setPlayers] = useState([])
@@ -335,6 +337,20 @@ export default function Game() {
     }, 3000)
     return () => clearTimeout(timer)
   }, [isOwner, playingPhase, session?.currentTurn, session?.cardsOnTable, players, code, currentUserId])
+
+  // ── auto host-election when host tab closes without clicking Leave ───────────
+  // If the host's heartbeat goes stale and I'm the first active player by
+  // joinOrder, I claim the host role so join requests keep working.
+  useEffect(() => {
+    if (!session || session.ownerId === currentUserId) return
+    const host = players.find((p) => p.id === session.ownerId)
+    if (!host || !(host.status === 'disconnected' && isPlayerOffline(host))) return
+    const firstActive = [...players]
+      .filter((p) => p.status === 'active')
+      .sort((a, b) => (a.joinOrder ?? 0) - (b.joinOrder ?? 0))[0]
+    if (firstActive?.id !== currentUserId) return
+    claimHostRole(code).catch(() => {})
+  }, [session?.ownerId, code, currentUserId, players])
 
   // ── handlers ────────────────────────────────────────────────────────────────
   async function handleAcceptJoin(request) {

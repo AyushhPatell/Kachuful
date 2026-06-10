@@ -824,6 +824,49 @@ export async function kickPlayer(code, targetUserId) {
   await deleteDoc(playerRef(code, targetUserId))
 }
 
+/**
+ * Transfer host to the next active player (by joinOrder) when the current
+ * host is leaving. No-op if the caller is not the host or no other active
+ * player exists.
+ */
+export async function transferHostOnLeave(code) {
+  if (!isFirebaseConfigured) return
+  const userId = auth.currentUser?.uid
+  if (!userId) return
+  try {
+    const sessionSnap = await getDoc(sessionsRef(code))
+    if (!sessionSnap.exists()) return
+    if (sessionSnap.data().ownerId !== userId) return
+
+    const q = query(playersCollection(code), orderBy('joinOrder'))
+    const playerDocs = await getDocs(q)
+    const nextHost = playerDocs.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .find(p => p.id !== userId && p.status === 'active')
+    if (!nextHost) return
+
+    await updateDoc(sessionsRef(code), { ownerId: nextHost.id })
+  } catch {
+    // Best effort — don't block the leave flow
+  }
+}
+
+/**
+ * Claim the host role when the current host appears abandoned (disconnected
+ * and heartbeat stale). Only the first active player by joinOrder should
+ * call this — callers must check that themselves before calling.
+ */
+export async function claimHostRole(code) {
+  if (!isFirebaseConfigured) return
+  const userId = auth.currentUser?.uid
+  if (!userId) return
+  try {
+    await updateDoc(sessionsRef(code), { ownerId: userId })
+  } catch {
+    // Best effort
+  }
+}
+
 /** Returns true if the player's heartbeat is stale (offline). */
 export function isPlayerOffline(player) {
   if (!player.lastSeenAt) return false
