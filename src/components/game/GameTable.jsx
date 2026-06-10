@@ -64,6 +64,7 @@ export default function GameTable({
   callingPhase = false,
   dealerPlayerId = null,
   onTimerExpire,
+  currentTurnStartedAt = null,
   className = '',
 }) {
   const seated = orderPlayersForTable(players, turnOrder, currentUserId)
@@ -91,6 +92,9 @@ export default function GameTable({
   const hiddenCardId = flyPlay?.fromLocal ? flyPlay.card?.id : null
   const localPlayer = seated[0]
   const localIsTurn = currentTurn === currentUserId
+  const timerInitialSeconds = currentTurnStartedAt
+    ? Math.max(0, 40 - Math.floor((Date.now() - currentTurnStartedAt) / 1000))
+    : undefined
 
   function cardAnimate(play, seatIndex) {
     const trickOffset = getTrickCardOffset(seatIndex, seated.length)
@@ -133,6 +137,7 @@ export default function GameTable({
               <TurnTimer
                 isActive={localIsTurn && tablePhase === 'playing' && (!callingPhase || me?.call == null)}
                 resetKey={`${roundNumber}-${currentTurn}`}
+                initialSeconds={timerInitialSeconds}
                 onExpire={onTimerExpire}
               />
             </div>

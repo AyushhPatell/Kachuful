@@ -103,6 +103,7 @@ async function beginRound(code, sessionRound, activePlayers, firstDealerIndex) {
     roundDirection: getRoundDirection(sessionRound, maxRound),
     maxRound,
     currentTurn: leaderId,
+    currentTurnStartedAt: Date.now(),
     cardsOnTable: [],
     trickExpectedCount: null,
     turnOrder,
@@ -481,7 +482,7 @@ export async function submitCall(code, roundNumber, userId, call) {
     const nextCaller = getNextCaller(turnOrder, updatedPlayers)
 
     if (nextCaller) {
-      transaction.update(sessionsRef(code), { currentTurn: nextCaller })
+      transaction.update(sessionsRef(code), { currentTurn: nextCaller, currentTurnStartedAt: Date.now() })
     }
   })
 
@@ -503,6 +504,7 @@ export async function submitCall(code, roundNumber, userId, call) {
     await updateDoc(roundRef(code, roundNumber), { status: ROUND_STATUS.PLAYING })
     await updateDoc(sessionsRef(code), {
       currentTurn: leaderId,
+      currentTurnStartedAt: Date.now(),
       cardsOnTable: [],
       trickExpectedCount: null,
     })
@@ -561,6 +563,7 @@ export async function playCard(code, userId, card) {
       transaction.update(sessionsRef(code), {
         cardsOnTable,
         currentTurn: nextTurn,
+        currentTurnStartedAt: Date.now(),
         trickExpectedCount,
       })
       return
@@ -588,6 +591,7 @@ export async function playCard(code, userId, card) {
         at: Date.now(),
       },
       currentTurn: allEmpty ? null : winner.userId,
+      currentTurnStartedAt: allEmpty ? null : Date.now(),
     })
   })
 }
