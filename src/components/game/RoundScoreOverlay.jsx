@@ -133,7 +133,7 @@ export default function RoundScoreOverlay({
                     boxShadow: '0 4px 16px rgba(245,158,11,0.35)',
                   }}
                 >
-                  Next Round →
+                  {busy ? 'Starting…' : 'Next Round →'}
                 </motion.button>
               ) : (
                 <p className="rounded-xl bg-white/5 py-3 text-center text-xs text-zinc-400">

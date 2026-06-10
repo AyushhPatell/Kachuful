@@ -1,10 +1,10 @@
 export const SAR_SEQUENCE = ['Ka', 'Chu', 'Fu', 'L']
 
 export const SAR_INFO = {
-  Ka:  { name: 'Kadi',    suit: 'spades',   symbol: '♠', color: 'text-neutral-900' },
-  Chu: { name: 'Charkat', suit: 'diamonds',  symbol: '♦', color: 'text-red-600'     },
-  Fu:  { name: 'Fallai',  suit: 'clubs',     symbol: '♣', color: 'text-neutral-900' },
-  L:   { name: 'Laal',    suit: 'hearts',    symbol: '♥', color: 'text-red-600'     },
+  Ka:  { name: 'Kadi',    suit: 'spades',   symbol: '♠', color: 'text-zinc-100'  },
+  Chu: { name: 'Charkat', suit: 'diamonds',  symbol: '♦', color: 'text-red-400'   },
+  Fu:  { name: 'Fallai',  suit: 'clubs',     symbol: '♣', color: 'text-zinc-100'  },
+  L:   { name: 'Laal',    suit: 'hearts',    symbol: '♥', color: 'text-red-400'   },
 }
 
 export const SUITS = ['clubs', 'diamonds', 'spades', 'hearts']

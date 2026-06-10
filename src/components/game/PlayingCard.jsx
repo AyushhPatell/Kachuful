@@ -47,11 +47,11 @@ const SIZES = {
     p: 'p-[3px]',
   },
   hand: {
-    w: 'w-[2.95rem] sm:w-[3.35rem]',
-    h: 'h-[7rem] sm:h-[7.75rem]',
-    rankSize: 'text-[12px] sm:text-[13px]',
-    suitSize: 'text-[22px] sm:text-[26px]',
-    p: 'p-1 sm:p-1.5',
+    w: 'w-[3.1rem] sm:w-[3.5rem]',
+    h: 'h-[4.6rem] sm:h-[5.2rem]',
+    rankSize: 'text-[11px] sm:text-[12px]',
+    suitSize: 'text-[18px] sm:text-[22px]',
+    p: 'p-[3px] sm:p-1',
   },
   compact: {
     w: 'w-[2rem] sm:w-[2.2rem]',
