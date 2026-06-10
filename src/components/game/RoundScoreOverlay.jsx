@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { calculateRoundPoints } from '../../lib/gameLogic.js'
 import { playSound } from '../../lib/sounds.js'
+import GameMenu from './GameMenu.jsx'
 
 export default function RoundScoreOverlay({
   show,
@@ -10,6 +11,8 @@ export default function RoundScoreOverlay({
   roundNumber,
   isOwner,
   onNextRound,
+  onLeave,
+  sessionCode,
   busy,
 }) {
   const me = players?.find(p => p.id === currentUserId)
@@ -52,7 +55,7 @@ export default function RoundScoreOverlay({
           >
             {/* Header */}
             <div
-              className="px-5 py-4 text-center"
+              className="relative px-5 py-4 text-center"
               style={{
                 background: 'linear-gradient(135deg, rgba(201,150,58,0.14), rgba(201,150,58,0.04))',
                 borderBottom: '1px solid rgba(255,255,255,0.07)',
@@ -67,6 +70,10 @@ export default function RoundScoreOverlay({
               >
                 {madCall ? '✓ Call Made!' : 'Round Over'}
               </p>
+              {/* 3-dot menu always accessible even when overlay covers the HUD */}
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <GameMenu sessionCode={sessionCode} onLeave={onLeave} />
+              </div>
             </div>
 
             {/* Score rows */}

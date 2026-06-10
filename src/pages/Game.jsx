@@ -55,6 +55,7 @@ export default function Game() {
 
   const lastTableLenRef = useRef(0)
   const localFlyRef = useRef(false)
+  const prevRoundNumberRef = useRef(0)
 
   const isOwner = session?.ownerId === currentUserId
   const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
@@ -90,7 +91,10 @@ export default function Game() {
   const playingPhase = round?.status === ROUND_STATUS.PLAYING && tablePhase === 'playing'
   const roundComplete = round?.status === ROUND_STATUS.COMPLETE
   const scoresReady = Boolean(round?.results && Object.keys(round.results).length > 0)
-  const showRoundScores = tablePhase === 'round-scores'
+  // Show overlay if in round-scores phase OR if we reloaded mid-round-complete (tablePhase reset to 'playing')
+  const showRoundScores =
+    tablePhase === 'round-scores' ||
+    (roundComplete && scoresReady && tablePhase === 'playing')
 
   const visibleHandCount = useMemo(() => {
     if (tablePhase === 'dealing') {
@@ -172,6 +176,18 @@ export default function Game() {
     setDealStep(0)
     return undefined
   }, [round?.status, roundNumber, round?.dealerIndex])
+
+  // When session.currentRound increments (non-host devices), immediately kick off
+  // dealing state so there's no blank-table gap while the new round doc loads from Firebase
+  useEffect(() => {
+    if (!roundNumber) return
+    if (prevRoundNumberRef.current && roundNumber > prevRoundNumberRef.current) {
+      setFrozenTrickReveal(null)
+      setDealStep(0)
+      setTablePhase('dealing')
+    }
+    prevRoundNumberRef.current = roundNumber
+  }, [roundNumber])
 
   useEffect(() => {
     if (tablePhase !== 'dealing' || !dealSequence.length) return undefined
@@ -388,6 +404,8 @@ export default function Game() {
         roundNumber={roundNumber}
         isOwner={isOwner}
         onNextRound={handleNextRound}
+        onLeave={leaveSession}
+        sessionCode={code}
         busy={busy}
       />
 

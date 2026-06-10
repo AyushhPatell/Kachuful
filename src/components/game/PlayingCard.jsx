@@ -134,19 +134,7 @@ export default function PlayingCard({
         </div>
 
         <div className="flex flex-1 items-center justify-center">
-          {isFace ? (
-            <div className="flex flex-col items-center gap-0.5">
-              <span className={`${sz.suitSize} leading-none`}>{sym}</span>
-              <span
-                className="font-bold uppercase leading-none opacity-50"
-                style={{ fontSize: '0.55em', letterSpacing: '0.08em' }}
-              >
-                {card.rank === 'J' ? 'Jck' : card.rank === 'Q' ? 'Qn' : 'Kg'}
-              </span>
-            </div>
-          ) : (
-            <span className={`${sz.suitSize} leading-none`}>{sym}</span>
-          )}
+          <span className={`${sz.suitSize} leading-none`}>{sym}</span>
         </div>
 
         <div className="flex flex-col items-end rotate-180 leading-[1]">
