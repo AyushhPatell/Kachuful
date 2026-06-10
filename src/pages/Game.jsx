@@ -63,7 +63,6 @@ export default function Game() {
   const prevRoundNumberRef = useRef(0)
 
   const isOwner = session?.ownerId === currentUserId
-  const reactionFloaters = useEmojiReactions(session, seated, currentUserId)
   const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
 
   const me = players.find((p) => p.id === currentUserId)
@@ -79,6 +78,8 @@ export default function Game() {
     () => orderPlayersForTable(players, session?.turnOrder ?? [], currentUserId),
     [players, session?.turnOrder, currentUserId],
   )
+
+  const reactionFloaters = useEmojiReactions(session, seated, currentUserId)
 
   const activePlayerIds = useMemo(() => seated.map((p) => p.id), [seated])
 
