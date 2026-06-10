@@ -1,23 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 @theme {
-  --color-surface: #16161a;
-  --color-surface-raised: #1f1f24;
-  --color-border: #2e2e36;
-  --color-muted: #71717a;
-  --color-text: #f4f4f5;
-  --color-accent: #dc2626;
-  --color-accent-hover: #ef4444;
+  /* Surface */
+  --color-surface: #0d0f0c;
+  --color-surface-raised: #181c17;
+  --color-border: #2a2e28;
+  --color-muted: #6b7468;
+  --color-text: #f0f2ee;
+
+  /* Accent — warm gold */
+  --color-accent: #c9963a;
+  --color-accent-hover: #e0aa45;
+
+  /* Fonts */
   --font-display: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-cinzel: 'Cinzel', Georgia, serif;
 }
 
 body {
   margin: 0;
   min-height: 100svh;
-  background-color: #09090b;
+  background-color: #080a07;
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(220, 38, 38, 0.12), transparent),
-    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(255, 255, 255, 0.03), transparent);
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(201, 150, 58, 0.07), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(255, 255, 255, 0.02), transparent);
   color: var(--color-text);
   font-family: var(--font-display);
   -webkit-font-smoothing: antialiased;
@@ -41,4 +48,25 @@ textarea {
 
 button {
   touch-action: manipulation;
+}
+
+/* Floating suit background for menu screens */
+@keyframes floatCard {
+  0%, 100% { transform: translateY(0px) rotate(var(--r)); opacity: 0.045; }
+  50% { transform: translateY(-18px) rotate(calc(var(--r) + 6deg)); opacity: 0.075; }
+}
+
+.suit-float {
+  animation: floatCard 6s ease-in-out infinite;
+}
+
+/* Number count-up animation for score reveals */
+@keyframes popIn {
+  0% { transform: scale(0.5); opacity: 0; }
+  70% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.pop-in {
+  animation: popIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }

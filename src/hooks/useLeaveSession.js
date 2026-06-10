@@ -1,16 +1,10 @@
 import { useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { leaveGame } from '../firebase/sessions.js'
 
-export function useLeaveSession(code) {
+export function useLeaveSession() {
   const navigate = useNavigate()
 
-  return useCallback(async () => {
-    try {
-      await leaveGame(code)
-    } catch (err) {
-      console.error('Error leaving session:', err)
-    }
+  return useCallback(() => {
     navigate('/')
-  }, [code, navigate])
+  }, [navigate])
 }

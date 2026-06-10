@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ROUND_STATUS, SAR_INFO } from '../../constants/game.js'
+import { SAR_INFO } from '../../constants/game.js'
 import { calculateRoundPoints, isTrumpCard } from '../../lib/gameLogic.js'
-import { getSeatHandCount, getSeatPositions, orderPlayersForTable } from '../../lib/seatLayout.js'
-import Button from '../ui/Button.jsx'
-import CardStackBadge from './CardStackBadge.jsx'
+import {
+  getSeatHandCount,
+  getSeatPositions,
+  getTrickCardOffset,
+  orderPlayersForTable,
+} from '../../lib/seatLayout.js'
+import GameMenu from './GameMenu.jsx'
 import HandFan from './HandFan.jsx'
-import PlayerAvatar from './PlayerAvatar.jsx'
 import PlayingCard, { DeckStack, SarBadge } from './PlayingCard.jsx'
 import SeatPod from './SeatPod.jsx'
 import TableSurface from './TableSurface.jsx'
-import GameMenu from './GameMenu.jsx'
+import TurnTimer from './TurnTimer.jsx'
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false)
@@ -58,10 +61,8 @@ export default function GameTable({
   flyPlay,
   authPhotoURL,
   sessionCode,
-  turnMessage,
-  isMyTurn,
-  sortedHand = [],
   callingPhase = false,
+  dealerPlayerId = null,
   className = '',
 }) {
   const seated = orderPlayersForTable(players, turnOrder, currentUserId)
@@ -73,99 +74,110 @@ export default function GameTable({
   const trickWinnerId = trickReveal?.winnerId
   const isTrickPhase = tablePhase === 'trick-won'
   const isCollect = tablePhase === 'collect'
-  const showRoundScores = tablePhase === 'round-scores' && scoresReady
   const isDealing = tablePhase === 'dealing'
   const dealComplete = !isDealing || dealStep >= dealSequence.length
   const faceUpHand = dealComplete && tablePhase !== 'dealing'
 
   const handCtx = { tablePhase, dealSequence, dealStep, cardsPerRound }
 
-  const winnerIndex = seated.findIndex((p) => p.id === trickWinnerId)
+  const winnerIndex = seated.findIndex(p => p.id === trickWinnerId)
   const winnerFly = winnerIndex >= 0 ? seatPositions[winnerIndex] : { flyX: 0, flyY: -60 }
 
-  const dealTargetIndex = seated.findIndex((p) => p.id === dealTargetPlayerId)
+  const dealTargetIndex = seated.findIndex(p => p.id === dealTargetPlayerId)
   const dealFly = dealTargetIndex >= 0 ? seatPositions[dealTargetIndex] : { flyX: 0, flyY: -60 }
 
-  const playableIds = new Set(playableCards.map((c) => c.id))
+  const playableIds = new Set(playableCards.map(c => c.id))
   const hiddenCardId = flyPlay?.fromLocal ? flyPlay.card?.id : null
+  const localPlayer = seated[0]
+  const localIsTurn = currentTurn === currentUserId
 
-  function cardAnimate(play) {
+  function cardAnimate(play, seatIndex) {
+    const trickOffset = getTrickCardOffset(seatIndex, seated.length)
     if (reducedMotion) {
-      if (isCollect) return { opacity: 0, scale: 0.5 }
-      return { opacity: 1, x: 0, y: 0, scale: 1 }
+      if (isCollect) return { opacity: 0, scale: 0.5, x: trickOffset.x, y: trickOffset.y }
+      return { opacity: 1, x: trickOffset.x, y: trickOffset.y, scale: 1 }
     }
     if (isCollect) {
-      return { x: 0, y: 0, scale: 0.15, opacity: 0, transition: { duration: 0.55 } }
+      return { x: 0, y: 0, scale: 0.12, opacity: 0, transition: { duration: 0.5 } }
     }
     if (isTrickPhase) {
       return {
         x: winnerFly.flyX,
         y: winnerFly.flyY,
-        scale: play.userId === trickWinnerId ? 0.9 : 0.72,
-        opacity: play.userId === trickWinnerId ? 1 : 0.45,
-        transition: { duration: 0.65, ease: 'easeInOut' },
+        scale: play.userId === trickWinnerId ? 0.9 : 0.6,
+        opacity: play.userId === trickWinnerId ? 1 : 0.3,
+        transition: { duration: 0.6, ease: 'easeInOut' },
       }
     }
-    return { x: 0, y: 0, scale: 1, opacity: 1 }
+    return { x: trickOffset.x, y: trickOffset.y, scale: 1, opacity: 1 }
   }
 
-  const localPlayer = seated[0]
-  const localHandCount = localPlayer
-    ? getSeatHandCount(localPlayer, currentUserId, handCtx)
-    : 0
+  function tableCardRotation(seatIndex, cardId) {
+    const hash = (seatIndex * 37 + (cardId?.charCodeAt?.(0) ?? 0)) % 14
+    return hash - 7
+  }
 
   return (
-    <section className={`relative flex flex-col ${className}`}>
-      <TableSurface className="h-full min-h-0 flex-1">
-        {/* HUD on felt */}
-        <div className="absolute left-0 right-0 top-3 z-20 flex items-start justify-between gap-2 px-3 sm:px-4">
-          <div className="rounded-full bg-black/25 px-3 py-1 text-[11px] font-medium text-emerald-100/90 backdrop-blur-sm">
+    <section className={`relative flex h-full min-h-0 flex-col ${className}`}>
+      <TableSurface className="flex-1">
+        {/* HUD */}
+        <div className="absolute left-0 right-0 top-2 z-30 flex items-center justify-between gap-2 px-3 sm:top-3 sm:px-4">
+          <div
+            className="rounded-full px-3 py-1 text-[11px] font-medium text-emerald-100/90 backdrop-blur-sm"
+            style={{ background: 'rgba(0,0,0,0.38)', fontFamily: 'Cinzel, serif' }}
+          >
             Round {roundNumber}
             {cardsPerRound ? ` · ${cardsPerRound} card${cardsPerRound === 1 ? '' : 's'}` : ''}
           </div>
           <div className="flex items-center gap-2">
+            <TurnTimer
+              isActive={localIsTurn && tablePhase === 'playing'}
+              resetKey={`${roundNumber}-${currentTurn}`}
+            />
             {sarInfo ? <SarBadge sar={sar} compact /> : null}
             {sessionCode ? <GameMenu sessionCode={sessionCode} onLeave={onLeave} /> : null}
           </div>
         </div>
 
-        {/* Seats */}
+        {/* Opponent seats */}
         <div className="absolute inset-0 z-10">
           {seated.map((player, index) => {
             const pos = seatPositions[index]
-            if (!pos || pos.isLocal) return null
+            if (!pos?.isLocal) {
+              const isTurn = currentTurn === player.id
+              const isTrickWinner = trickWinnerId === player.id && isTrickPhase
+              const roundPts = getRoundPoints(player, round)
+              const handCount = getSeatHandCount(player, currentUserId, handCtx)
+              const receivingDeal = isDealing && dealTargetPlayerId === player.id
 
-            const isTurn = currentTurn === player.id
-            const isTrickWinner = trickWinnerId === player.id && isTrickPhase
-            const roundPts = getRoundPoints(player, round)
-            const handCount = getSeatHandCount(player, currentUserId, handCtx)
-            const receivingDeal = isDealing && dealTargetPlayerId === player.id
-
-            return (
-              <div
-                key={player.id}
-                className="absolute -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-              >
-                <SeatPod
-                  player={player}
-                  isTurn={isTurn}
-                  isTrickWinner={isTrickWinner}
-                  callingPhase={callingPhase}
-                  showRoundScores={showRoundScores}
-                  roundPts={roundPts}
-                  handCount={handCount}
-                  receivingDeal={receivingDeal}
-                  tablePhase={tablePhase}
-                  roundStatus={round?.status}
-                />
-              </div>
-            )
+              return (
+                <div
+                  key={player.id}
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                >
+                  <SeatPod
+                    player={player}
+                    isTurn={isTurn}
+                    isTrickWinner={isTrickWinner}
+                    showRoundScores={false}
+                    roundPts={roundPts}
+                    handCount={handCount}
+                    receivingDeal={receivingDeal}
+                    tablePhase={tablePhase}
+                    callingPhase={callingPhase}
+                    isDealer={dealerPlayerId === player.id}
+                    compact={seated.length > 4}
+                  />
+                </div>
+              )
+            }
+            return null
           })}
         </div>
 
-        {/* Center: deck / trick */}
-        <div className="absolute left-1/2 top-[42%] z-[15] flex min-h-[120px] w-[88%] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center">
+        {/* Center: deck + trick */}
+        <div className="absolute left-1/2 top-[44%] z-[15] flex min-h-[100px] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center px-4">
           {isDealing ? (
             <div className="relative flex flex-col items-center">
               <DeckStack />
@@ -177,9 +189,9 @@ export default function GameTable({
                     animate={
                       reducedMotion
                         ? { opacity: 0 }
-                        : { x: dealFly.flyX, y: dealFly.flyY, opacity: 0, scale: 0.55 }
+                        : { x: dealFly.flyX, y: dealFly.flyY, opacity: 0, scale: 0.5 }
                     }
-                    transition={{ duration: 0.45, ease: 'easeOut' }}
+                    transition={{ duration: 0.36, ease: 'easeOut' }}
                     className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
                   >
                     <PlayingCard faceDown small />
@@ -190,31 +202,50 @@ export default function GameTable({
           ) : null}
 
           {!isDealing && (isCollect || centerCards.length > 0) ? (
-            <div className="relative flex flex-wrap items-end justify-center gap-2 sm:gap-3">
-              {centerCards.map((play) => {
+            <div className="relative h-28 w-full sm:h-32">
+              {centerCards.map(play => {
+                const seatIndex = seated.findIndex(p => p.id === play.userId)
                 const trump = isTrumpCard(play.card, sar ?? trickReveal?.sar)
                 const isFlyingHere = flyPlay?.card?.id === play.card.id
                 if (isFlyingHere) return null
+                const rot = tableCardRotation(seatIndex, play.card.id)
+
                 return (
                   <motion.div
-                    key={`${trickReveal?.at ?? 't'}-${play.userId}-${play.card.id}`}
-                    initial={reducedMotion ? false : { scale: 0.75, opacity: 0, y: 14 }}
-                    animate={cardAnimate(play)}
-                    className={`text-center ${
-                      play.userId === trickWinnerId && isTrickPhase
-                        ? 'rounded-xl ring-2 ring-amber-400/90'
-                        : trump
-                          ? 'rounded-xl ring-1 ring-emerald-300/50'
-                          : ''
-                    }`}
+                    key={`${play.userId}-${play.card.id}`}
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                    initial={reducedMotion ? false : { scale: 0.55, opacity: 0 }}
+                    animate={{
+                      ...cardAnimate(play, seatIndex),
+                      rotate: isTrickPhase || isCollect ? 0 : rot,
+                    }}
                   >
-                    <PlayingCard card={play.card} small />
+                    <div
+                      className={`${
+                        play.userId === trickWinnerId && isTrickPhase
+                          ? 'rounded-lg ring-2 ring-amber-400/90'
+                          : trump
+                          ? 'rounded-lg ring-[1.5px] ring-emerald-400/70'
+                          : ''
+                      }`}
+                    >
+                      <PlayingCard card={play.card} small isTrump={trump} />
+                    </div>
+                    {trump && !isTrickPhase && !isCollect && (
+                      <motion.div
+                        initial={{ scale: 0.85, opacity: 0.9 }}
+                        animate={{ scale: 2.4, opacity: 0 }}
+                        transition={{ duration: 0.55, ease: 'easeOut' }}
+                        className="pointer-events-none absolute inset-0 rounded-lg"
+                        style={{ border: '2px solid rgba(34,197,94,0.8)' }}
+                      />
+                    )}
                   </motion.div>
                 )
               })}
               {isCollect ? (
                 <motion.div
-                  initial={{ scale: 0.5, opacity: 0 }}
+                  initial={{ scale: 0.4, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
                 >
@@ -224,101 +255,65 @@ export default function GameTable({
             </div>
           ) : null}
 
-          {!isDealing && !isCollect && centerCards.length === 0 && !showRoundScores && !flyPlay ? (
-            turnMessage ? (
+          {/* Trick winner announcement */}
+          <AnimatePresence>
+            {isTrickPhase && trickReveal?.winnerName ? (
               <motion.div
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className={`max-w-[90%] rounded-2xl px-5 py-3 text-center shadow-lg backdrop-blur-sm ${
-                  isMyTurn
-                    ? 'bg-amber-500/25 ring-1 ring-amber-400/40'
-                    : 'bg-black/35 ring-1 ring-white/10'
-                }`}
+                initial={{ opacity: 0, scale: 0.72, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.85 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 22 }}
+                className="mt-3 pointer-events-none"
               >
-                <p
-                  className={`text-sm font-medium leading-snug ${
-                    isMyTurn ? 'text-amber-50' : 'text-emerald-100/90'
-                  }`}
+                <div
+                  className="rounded-full px-5 py-1.5 text-sm font-bold text-amber-200 whitespace-nowrap text-center"
+                  style={{
+                    background: 'rgba(0,0,0,0.68)',
+                    border: '1px solid rgba(251,191,36,0.38)',
+                    boxShadow: '0 0 20px rgba(251,191,36,0.18)',
+                    backdropFilter: 'blur(6px)',
+                    fontFamily: 'Cinzel, serif',
+                  }}
                 >
-                  {turnMessage}
-                </p>
+                  🏆 {trickReveal.winnerName}
+                </div>
               </motion.div>
-            ) : (
-              <p className="text-sm text-emerald-100/30">Play a card</p>
-            )
-          ) : null}
-
-          {turnMessage && !isDealing && centerCards.length > 0 && !isTrickPhase ? (
-            <p className="mt-2 max-w-[90%] text-center text-[11px] text-emerald-100/60">{turnMessage}</p>
-          ) : null}
-
-          {isTrickPhase && trickReveal?.winnerName ? (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-2 text-center text-xs font-medium text-amber-200/90"
-            >
-              {trickReveal.winnerName} wins the trick
-            </motion.p>
-          ) : null}
+            ) : null}
+          </AnimatePresence>
         </div>
 
-        {/* Flying play overlay */}
+        {/* Flying play */}
         <AnimatePresence>
           {flyPlay ? (
             <motion.div
               key={flyPlay.key ?? flyPlay.card.id}
               initial={{
                 x: flyPlay.fromLocal ? 0 : flyPlay.fromX ?? 0,
-                y: flyPlay.fromLocal ? 120 : flyPlay.fromY ?? -80,
+                y: flyPlay.fromLocal ? 160 : flyPlay.fromY ?? -100,
                 opacity: 1,
-                scale: flyPlay.fromLocal ? 1 : 0.85,
+                scale: flyPlay.fromLocal ? 1.05 : 0.9,
               }}
-              animate={{ x: 0, y: -40, opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: reducedMotion ? 0.05 : 0.42, ease: 'easeOut' }}
-              className="pointer-events-none absolute left-1/2 top-[42%] z-30 -translate-x-1/2 -translate-y-1/2"
+              animate={{ x: 0, y: -20, opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 0.72 }}
+              transition={{ duration: reducedMotion ? 0.05 : 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="pointer-events-none absolute left-1/2 top-[44%] z-30 -translate-x-1/2 -translate-y-1/2"
             >
-              <PlayingCard card={flyPlay.card} small />
+              <PlayingCard card={flyPlay.card} small isTrump={isTrumpCard(flyPlay.card, sar)} />
             </motion.div>
           ) : null}
         </AnimatePresence>
 
-        {/* Local player pod + hand fan */}
+        {/* Local player hand */}
         {localPlayer && handVisible ? (
-          <div className="absolute inset-x-0 bottom-0 z-20 px-2 pb-2 sm:pb-3">
-            <div className="mb-1 flex flex-col items-center">
-              <div
-                className={`flex items-center gap-2 rounded-full px-3 py-1 ${
-                  currentTurn === localPlayer.id &&
-                  (tablePhase === 'playing' || callingPhase) &&
-                  !showRoundScores
-                    ? 'bg-amber-500/20 ring-1 ring-amber-400/50'
-                    : 'bg-black/20'
-                }`}
-              >
-                <PlayerAvatar
-                  name={localPlayer.name}
-                  photoURL={localPlayer.photoURL ?? authPhotoURL}
-                  size="sm"
-                />
-                <span className="text-[11px] font-medium text-emerald-50">{localPlayer.name}</span>
-                <span className="text-[10px] text-emerald-200/60">
-                  {localPlayer.tricksWon ?? 0} won
-                </span>
-                {round?.status === ROUND_STATUS.CALLING || round?.status === ROUND_STATUS.PLAYING ? (
-                  <span className="text-[10px] font-medium text-amber-200/90">
-                    · Call {localPlayer.call != null ? localPlayer.call : '—'}
-                  </span>
-                ) : null}
-                {localHandCount > 0 && !showRoundScores ? (
-                  <span className="text-[10px] text-emerald-200/50">· {localHandCount} cards</span>
-                ) : null}
-              </div>
-            </div>
-
+          <div
+            className={`absolute inset-x-0 bottom-0 z-20 px-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] sm:px-2 ${
+              localIsTurn && tablePhase === 'playing'
+                ? 'before:pointer-events-none before:absolute before:inset-x-4 before:bottom-0 before:top-0 before:rounded-t-3xl before:bg-amber-500/[0.055] before:ring-1 before:ring-amber-400/18'
+                : ''
+            }`}
+          >
             <HandFan
-              cards={sortedHand}
+              cards={me?.hand ?? []}
               visibleCount={visibleHandCount}
               faceDown={isDealing && !dealComplete}
               faceUpAfterDeal={faceUpHand}
@@ -328,42 +323,12 @@ export default function GameTable({
               dimmed={tablePhase === 'trick-won' || tablePhase === 'collect'}
               hiddenCardId={hiddenCardId}
               reducedMotion={reducedMotion}
+              isMyTurn={localIsTurn && tablePhase === 'playing'}
+              sar={sar}
             />
           </div>
         ) : null}
-
-        {/* Spectator / round score local badges */}
-        {showRoundScores && localPlayer ? (
-          <div className="absolute inset-x-0 bottom-4 z-20 flex justify-center">
-            <div className="rounded-xl bg-black/40 px-4 py-2 text-center text-xs text-emerald-100 backdrop-blur-sm">
-              <p>Call {localPlayer.call ?? 0} · Won {localPlayer.tricksWon ?? 0}</p>
-              <p className="font-semibold text-amber-300">
-                {getRoundPoints(localPlayer, round) > 0
-                  ? `+${getRoundPoints(localPlayer, round)} pts`
-                  : '0 pts'}
-              </p>
-            </div>
-          </div>
-        ) : null}
       </TableSurface>
-
-      {showRoundScores ? (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="shrink-0 border-t border-white/10 bg-zinc-950/90 p-3"
-        >
-          {isOwner ? (
-            <Button className="w-full" disabled={busy} onClick={onNextRound}>
-              Next round
-            </Button>
-          ) : (
-            <p className="rounded-xl bg-surface-raised px-3 py-2.5 text-center text-xs text-muted">
-              Waiting for host to start next round…
-            </p>
-          )}
-        </motion.div>
-      ) : null}
     </section>
   )
 }

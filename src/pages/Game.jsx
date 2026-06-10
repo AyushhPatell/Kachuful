@@ -7,9 +7,9 @@ import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useJoinRequests } from '../hooks/useJoinRequests.js'
 import { useLeaveSession } from '../hooks/useLeaveSession.js'
-import { PLAY_FLY_MS, useTablePhase } from '../hooks/useTablePhase.js'
 import {
   acceptJoinRequest,
+  acknowledgeTrickReveal,
   advanceToNextRound,
   hasPendingJoinRequest,
   playCard,
@@ -20,16 +20,22 @@ import {
   subscribeToRound,
   subscribeToSession,
 } from '../firebase/sessions.js'
+import RoundScoreOverlay from '../components/game/RoundScoreOverlay.jsx'
 import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
-import { getCardsPerRound, getPlayableCards, resolveSarForRound } from '../lib/gameLogic.js'
-import { sortHand } from '../lib/sortHand.js'
+import { getCardsPerRound, getPlayableCards, isTrumpCard, resolveSarForRound } from '../lib/gameLogic.js'
 import { getSeatPositions, orderPlayersForTable } from '../lib/seatLayout.js'
 import { ROUND_STATUS } from '../constants/game.js'
+import { playSound, unlockAudio } from '../lib/sounds.js'
+
+const TRICK_PAUSE_MS = 1200
+const COLLECT_MS = 700
+const DEAL_CARD_MS = 420
+const PLAY_FLY_MS = 400
 
 export default function Game() {
   const { code } = useParams()
   const navigate = useNavigate()
-  const leaveSession = useLeaveSession(code)
+  const leaveSession = useLeaveSession()
   const { userId, photoURL: authPhotoURL } = useAuth()
   const currentUserId = userId
 
@@ -40,6 +46,9 @@ export default function Game() {
   const [busy, setBusy] = useState(false)
   const [newRequestPing, setNewRequestPing] = useState(false)
   const [pendingFromSubcollection, setPendingFromSubcollection] = useState(false)
+  const [tablePhase, setTablePhase] = useState('playing')
+  const [frozenTrickReveal, setFrozenTrickReveal] = useState(null)
+  const [dealStep, setDealStep] = useState(0)
   const [flyPlay, setFlyPlay] = useState(null)
   const [callSheetOpen, setCallSheetOpen] = useState(false)
 
@@ -58,35 +67,29 @@ export default function Game() {
   const isSpectator = me?.status === 'spectator' || (pendingJoin && !me)
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
   const sar = resolveSarForRound(session, round)
-  const scoresReady = Boolean(round?.results && Object.keys(round.results).length > 0)
 
   const seated = useMemo(
     () => orderPlayersForTable(players, session?.turnOrder ?? [], currentUserId),
     [players, session?.turnOrder, currentUserId],
   )
 
+  const activePlayerIds = useMemo(() => seated.map((p) => p.id), [seated])
+
   const dealSequence = useMemo(
-    () => buildDealSequence(seated.map((p) => p.id), cardsPerRound, round?.dealerIndex ?? 0),
-    [seated, cardsPerRound, round?.dealerIndex],
+    () => buildDealSequence(activePlayerIds, cardsPerRound, round?.dealerIndex ?? 0),
+    [activePlayerIds, cardsPerRound, round?.dealerIndex],
   )
 
-  const {
-    tablePhase,
-    trickReveal,
-    dealStep,
-    callingPhase,
-    playingPhase,
-    resetForNextRound,
-  } = useTablePhase({
-    code,
-    isOwner,
-    round,
-    roundNumber,
-    session,
-    dealSequenceLength: dealSequence.length,
-    scoresReady,
-    onError: setError,
-  })
+  const dealerPlayerId = useMemo(() => {
+    const idx = round?.dealerIndex ?? 0
+    return session?.turnOrder?.[idx] ?? null
+  }, [round?.dealerIndex, session?.turnOrder])
+
+  const trickReveal = session?.lastTrickReveal ?? frozenTrickReveal
+  const callingPhase = round?.status === ROUND_STATUS.CALLING && tablePhase === 'playing'
+  const playingPhase = round?.status === ROUND_STATUS.PLAYING && tablePhase === 'playing'
+  const roundComplete = round?.status === ROUND_STATUS.COMPLETE
+  const scoresReady = Boolean(round?.results && Object.keys(round.results).length > 0)
 
   const visibleHandCount = useMemo(() => {
     if (tablePhase === 'dealing') {
@@ -102,12 +105,6 @@ export default function Game() {
     if (!me?.hand || !playingPhase) return []
     return getPlayableCards(me.hand, session?.cardsOnTable ?? [])
   }, [me?.hand, playingPhase, session?.cardsOnTable])
-
-  const sortedHand = useMemo(() => {
-    const hand = me?.hand ?? []
-    if (tablePhase === 'dealing' && dealStep < dealSequence.length) return hand
-    return sortHand(hand)
-  }, [me?.hand, tablePhase, dealStep, dealSequence.length])
 
   const showCallPicker = !isSpectator && callingPhase && me?.call == null && isMyTurn
 
@@ -142,6 +139,76 @@ export default function Game() {
   }, [code, roundNumber])
 
   useEffect(() => {
+    if (session?.lastTrickReveal?.at) {
+      setFrozenTrickReveal(session.lastTrickReveal)
+    }
+  }, [session?.lastTrickReveal?.at])
+
+  useEffect(() => {
+    const reveal = session?.lastTrickReveal
+    if (!reveal?.at) return undefined
+
+    setTablePhase('trick-won')
+
+    const timers = []
+
+    if (reveal.endsRound) {
+      timers.push(
+        setTimeout(() => {
+          acknowledgeTrickReveal(code).catch((err) => setError(err.message))
+        }, TRICK_PAUSE_MS),
+      )
+      timers.push(setTimeout(() => setTablePhase('collect'), TRICK_PAUSE_MS))
+      timers.push(
+        setTimeout(() => {
+          setTablePhase('round-scores')
+        }, TRICK_PAUSE_MS + COLLECT_MS),
+      )
+    } else {
+      timers.push(
+        setTimeout(() => {
+          acknowledgeTrickReveal(code)
+            .then(() => {
+              setTablePhase('playing')
+              setFrozenTrickReveal(null)
+            })
+            .catch((err) => setError(err.message))
+        }, TRICK_PAUSE_MS),
+      )
+    }
+
+    return () => timers.forEach(clearTimeout)
+  }, [code, session?.lastTrickReveal?.at, session?.lastTrickReveal?.endsRound])
+
+  useEffect(() => {
+    if (roundComplete && scoresReady && frozenTrickReveal?.endsRound) {
+      setTablePhase('round-scores')
+    }
+  }, [roundComplete, scoresReady, frozenTrickReveal?.endsRound])
+
+  useEffect(() => {
+    if (round?.status !== ROUND_STATUS.CALLING || roundNumber <= 0) return undefined
+
+    setTablePhase('dealing')
+    setFrozenTrickReveal(null)
+    setDealStep(0)
+
+    return undefined
+  }, [round?.status, roundNumber, round?.dealerIndex])
+
+  useEffect(() => {
+    if (tablePhase !== 'dealing' || !dealSequence.length) return undefined
+
+    if (dealStep >= dealSequence.length) {
+      setTablePhase('playing')
+      return undefined
+    }
+
+    const timer = setTimeout(() => setDealStep((s) => s + 1), DEAL_CARD_MS)
+    return () => clearTimeout(timer)
+  }, [tablePhase, dealStep, dealSequence.length])
+
+  useEffect(() => {
     const table = session?.cardsOnTable ?? []
     if (table.length <= lastTableLenRef.current) {
       lastTableLenRef.current = table.length
@@ -157,7 +224,8 @@ export default function Game() {
     }
 
     const seatIndex = seated.findIndex((p) => p.id === newPlay.userId)
-    const pos = seatIndex >= 0 ? getSeatPositions(seated.length)[seatIndex] : null
+    const positions = getSeatPositions(seated.length)
+    const pos = seatIndex >= 0 ? positions[seatIndex] : null
 
     setFlyPlay({
       card: newPlay.card,
@@ -172,8 +240,56 @@ export default function Game() {
   }, [session?.cardsOnTable, currentUserId, seated])
 
   useEffect(() => {
-    if ((session?.cardsOnTable ?? []).length === 0) lastTableLenRef.current = 0
+    if ((session?.cardsOnTable ?? []).length === 0) {
+      lastTableLenRef.current = 0
+    }
   }, [session?.cardsOnTable?.length])
+
+  // Unlock audio on mount (satisfies browser autoplay policy)
+  useEffect(() => { unlockAudio() }, [])
+
+  // Sound: shuffle + deal when a new dealing phase starts
+  const prevTablePhaseRef = useRef(null)
+  useEffect(() => {
+    if (tablePhase === 'dealing' && prevTablePhaseRef.current !== 'dealing') {
+      playSound('shuffle')
+    }
+    prevTablePhaseRef.current = tablePhase
+  }, [tablePhase])
+
+  // Sound: card deal tick on each deal step
+  const prevDealStepRef = useRef(0)
+  useEffect(() => {
+    if (tablePhase === 'dealing' && dealStep > prevDealStepRef.current) {
+      playSound('cardDeal')
+    }
+    prevDealStepRef.current = dealStep
+  }, [dealStep, tablePhase])
+
+  // Sound: your turn
+  const prevIsMyTurnRef = useRef(false)
+  useEffect(() => {
+    if (isMyTurn && !prevIsMyTurnRef.current && tablePhase === 'playing') {
+      playSound('yourTurn')
+    }
+    prevIsMyTurnRef.current = isMyTurn
+  }, [isMyTurn, tablePhase])
+
+  // Sound: trick won
+  const prevTrickRevealRef = useRef(null)
+  useEffect(() => {
+    if (trickReveal?.at && trickReveal.at !== prevTrickRevealRef.current) {
+      prevTrickRevealRef.current = trickReveal.at
+      playSound('trickWin')
+    }
+  }, [trickReveal?.at])
+
+  // Sound: trump played (when a trump card flies in)
+  useEffect(() => {
+    if (flyPlay?.card && isTrumpCard(flyPlay.card, sar)) {
+      playSound('trumpPlay')
+    }
+  }, [flyPlay?.key])
 
   async function handleAcceptJoin(request) {
     setError('')
@@ -233,8 +349,12 @@ export default function Game() {
     setError('')
     try {
       const result = await advanceToNextRound(code)
-      resetForNextRound()
-      if (result.ended) navigate(`/leaderboard/${code}`)
+      setFrozenTrickReveal(null)
+      setDealStep(0)
+      setTablePhase('dealing')
+      if (result.ended) {
+        navigate(`/leaderboard/${code}`)
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -242,22 +362,7 @@ export default function Game() {
     }
   }
 
-  const turnMessage = (() => {
-    if (tablePhase === 'trick-won') return 'Trick won'
-    if (tablePhase === 'collect') return 'Gathering cards…'
-    if (tablePhase === 'round-scores') return 'Round complete'
-    if (tablePhase === 'dealing') return 'Dealing…'
-    if (callingPhase && currentTurnPlayer) {
-      if (me?.call != null) return 'Waiting for other calls…'
-      if (isMyTurn) return 'Your turn — call tricks'
-      return `${currentTurnPlayer.name} is calling`
-    }
-    if (playingPhase && currentTurnPlayer) {
-      if (isMyTurn) return 'Your turn'
-      return `${currentTurnPlayer.name}'s turn`
-    }
-    return null
-  })()
+  const showRoundScores = tablePhase === 'round-scores'
 
   const handVisible =
     !isSpectator &&
@@ -278,9 +383,9 @@ export default function Game() {
   ) : null
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#0c0a08]">
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#080a07]">
       {isOwner && joinRequests.length > 0 ? (
-        <div className="z-20 shrink-0 border-b border-amber-500/20 bg-amber-950/90 px-3 py-2">
+        <div className="z-20 shrink-0 border-b border-amber-500/25 bg-amber-950/95 px-3 py-2">
           <JoinRequestsPanel
             joinRequests={joinRequests}
             newRequestPing={newRequestPing}
@@ -292,7 +397,7 @@ export default function Game() {
       ) : null}
 
       {isSpectator ? (
-        <p className="z-20 shrink-0 bg-zinc-900/80 px-3 py-1.5 text-center text-xs text-zinc-400">
+        <p className="z-20 shrink-0 bg-zinc-900/90 px-3 py-1.5 text-center text-xs text-zinc-400">
           {pendingJoin && !me
             ? 'Watching — ask the host to accept you for the next round.'
             : 'Spectator — you will play from the next round.'}
@@ -328,20 +433,28 @@ export default function Game() {
         flyPlay={flyPlay}
         authPhotoURL={authPhotoURL}
         sessionCode={code}
-        turnMessage={turnMessage}
-        isMyTurn={isMyTurn && (playingPhase || callingPhase)}
-        sortedHand={sortedHand}
         callingPhase={callingPhase}
+        dealerPlayerId={dealerPlayerId}
+      />
+
+      <RoundScoreOverlay
+        show={showRoundScores}
+        players={players}
+        currentUserId={currentUserId}
+        roundNumber={roundNumber}
+        isOwner={isOwner}
+        onNextRound={handleNextRound}
+        busy={busy}
       />
 
       {error ? (
-        <p className="absolute bottom-24 inset-x-4 z-30 rounded-lg bg-red-950/90 px-3 py-2 text-center text-xs text-red-100">
+        <p className="pointer-events-none absolute bottom-28 inset-x-4 z-40 rounded-lg bg-red-950/90 px-3 py-2 text-center text-xs text-red-100">
           {error}
         </p>
       ) : null}
 
       {listenError ? (
-        <p className="absolute bottom-36 inset-x-4 z-30 text-center text-xs text-amber-200">
+        <p className="pointer-events-none absolute bottom-40 inset-x-4 z-40 text-center text-xs text-amber-200">
           Join requests may not update live.
         </p>
       ) : null}
@@ -353,6 +466,12 @@ export default function Game() {
       >
         {callPicker}
       </BottomSheet>
+
+      {!isSpectator && callingPhase && me?.call == null && !isMyTurn ? (
+        <div className="pointer-events-none absolute inset-x-4 bottom-[9.5rem] z-30 rounded-full bg-black/50 px-4 py-2 text-center text-xs text-zinc-300 backdrop-blur-sm sm:bottom-36">
+          {currentTurnPlayer?.name ?? 'Opponent'} is calling…
+        </div>
+      ) : null}
 
       {showCallPicker ? (
         <div className="absolute bottom-4 inset-x-4 z-20 hidden max-w-md lg:mx-auto lg:block lg:left-1/2 lg:-translate-x-1/2">

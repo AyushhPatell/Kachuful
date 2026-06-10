@@ -73,15 +73,6 @@ async function getActivePlayers(code) {
     .sort((a, b) => a.joinOrder - b.joinOrder)
 }
 
-/** Active + spectators (spectators join the table next round). */
-async function getRoundParticipants(code) {
-  const playerDocs = await getDocs(playersCollection(code))
-  return playerDocs.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .filter((p) => p.status === 'active' || p.status === 'spectator')
-    .sort((a, b) => a.joinOrder - b.joinOrder)
-}
-
 function getNextTrickPlayer(turnOrder, handsById, cardsOnTable, afterUserId) {
   const played = new Set(cardsOnTable.map((p) => p.userId))
   const startIdx = turnOrder.indexOf(afterUserId)
@@ -528,9 +519,6 @@ export async function acknowledgeTrickReveal(code) {
   const reveal = session.lastTrickReveal
   if (!reveal) return
 
-  const userId = auth.currentUser?.uid
-  if (reveal.endsRound && session.ownerId !== userId) return
-
   const roundNumber = session.currentRound
 
   await updateDoc(sessionsRef(code), {
@@ -591,7 +579,7 @@ export async function advanceToNextRound(code) {
     throw new Error('This round is not finished yet')
   }
 
-  const activePlayers = await getRoundParticipants(code)
+  const activePlayers = await getActivePlayers(code)
   const maxRound = session.maxRound ?? getMaxRound(activePlayers.length)
   const cycleLength = 2 * maxRound - 1
 
@@ -602,102 +590,6 @@ export async function advanceToNextRound(code) {
 
   await beginRound(code, roundNumber + 1, activePlayers, session.firstDealerIndex ?? 0)
   return { ended: false, nextRound: roundNumber + 1 }
-}
-
-async function loadPlayersForTurnOrder(code, turnOrder) {
-  const players = await Promise.all(
-    turnOrder.map(async (id) => {
-      const snap = await getDoc(playerRef(code, id))
-      if (!snap.exists()) return null
-      return { id, ...snap.data() }
-    }),
-  )
-  return players.filter((p) => p && p.status !== 'spectator')
-}
-
-async function advanceCallingIfComplete(code, roundNumber, turnOrder, session) {
-  if (!turnOrder.length) return
-
-  const activePlayers = await loadPlayersForTurnOrder(code, turnOrder)
-  const allCalled = activePlayers.every((p) => p.call !== null && p.call !== undefined)
-  if (!allCalled || activePlayers.length === 0) return
-
-  const dealerIndex =
-    session.dealerIndex ??
-    getDealerIndexForRound(roundNumber, session.firstDealerIndex ?? 0, turnOrder.length)
-  const leaderId = turnOrder[dealerIndex]
-
-  await updateDoc(roundRef(code, roundNumber), { status: ROUND_STATUS.PLAYING })
-  await updateDoc(sessionsRef(code), {
-    currentTurn: leaderId,
-    cardsOnTable: [],
-    trickExpectedCount: null,
-  })
-}
-
-export async function leaveGame(code) {
-  if (!isFirebaseConfigured) throw new Error('Firebase not configured')
-
-  const userId = auth.currentUser.uid
-  const sessionSnap = await getDoc(sessionsRef(code))
-  if (!sessionSnap.exists()) return
-
-  const session = sessionSnap.data()
-  const roundNumber = session.currentRound ?? 0
-
-  if (hasPendingJoinRequest(session, userId)) {
-    try {
-      await deleteDoc(joinRequestRef(code, userId))
-    } catch {
-      // join request doc may only exist on session map from older clients
-    }
-    await clearJoinRequestFromSession(code, userId)
-  }
-
-  await deleteDoc(playerRef(code, userId))
-
-  if (roundNumber === 0 || session.status === SESSION_STATUS.LOBBY) {
-    return
-  }
-
-  const prevTurnOrder = session.turnOrder ?? []
-  const turnOrder = prevTurnOrder.filter((id) => id !== userId)
-  const cardsOnTable = (session.cardsOnTable ?? []).filter((play) => play.userId !== userId)
-
-  const sessionUpdate = { turnOrder, cardsOnTable }
-
-  const roundSnap = await getDoc(roundRef(code, roundNumber))
-  const roundStatus = roundSnap.data()?.status
-  const currentTurn = session.currentTurn
-
-  if (currentTurn === userId) {
-    if (roundStatus === ROUND_STATUS.CALLING) {
-      const callers = await loadPlayersForTurnOrder(code, turnOrder)
-      const nextCaller = getNextCaller(turnOrder, callers)
-      if (nextCaller) {
-        sessionUpdate.currentTurn = nextCaller
-      } else {
-        sessionUpdate.currentTurn = null
-      }
-    } else {
-      const handsById = {}
-      const playerDocs = await getDocs(playersCollection(code))
-      for (const doc of playerDocs.docs) {
-        handsById[doc.id] = doc.data().hand ?? []
-      }
-      const nextTurn = getNextTrickPlayer(turnOrder, handsById, cardsOnTable, userId)
-      if (nextTurn) sessionUpdate.currentTurn = nextTurn
-    }
-  } else if (currentTurn && !turnOrder.includes(currentTurn)) {
-    sessionUpdate.currentTurn = turnOrder[0] ?? null
-  }
-
-  await updateDoc(sessionsRef(code), sessionUpdate)
-
-  if (roundStatus === ROUND_STATUS.CALLING) {
-    const latest = (await getDoc(sessionsRef(code))).data()
-    await advanceCallingIfComplete(code, roundNumber, latest.turnOrder ?? [], latest)
-  }
 }
 
 export function isAcceptedPlayer(players, userId) {
