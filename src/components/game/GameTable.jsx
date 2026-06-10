@@ -63,6 +63,7 @@ export default function GameTable({
   sessionCode,
   callingPhase = false,
   dealerPlayerId = null,
+  onTimerExpire,
   className = '',
 }) {
   const seated = orderPlayersForTable(players, turnOrder, currentUserId)
@@ -131,8 +132,9 @@ export default function GameTable({
           </div>
           <div className="flex items-center gap-2">
             <TurnTimer
-              isActive={localIsTurn && tablePhase === 'playing'}
+              isActive={localIsTurn && tablePhase === 'playing' && (!callingPhase || me?.call == null)}
               resetKey={`${roundNumber}-${currentTurn}`}
+              onExpire={onTimerExpire}
             />
             {sarInfo ? <SarBadge sar={sar} compact /> : null}
             {sessionCode ? <GameMenu sessionCode={sessionCode} onLeave={onLeave} /> : null}

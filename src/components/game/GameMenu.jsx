@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import Button from '../ui/Button.jsx'
+import { isMuted, setMuted } from '../../lib/sounds.js'
 
 export default function GameMenu({ sessionCode, onLeave }) {
   const [open, setOpen] = useState(false)
   const [panel, setPanel] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [muted, setMutedState] = useState(() => isMuted())
   const rootRef = useRef(null)
 
   useEffect(() => {
@@ -18,6 +20,12 @@ export default function GameMenu({ sessionCode, onLeave }) {
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [open])
+
+  function handleToggleMute() {
+    const next = !muted
+    setMuted(next)
+    setMutedState(next)
+  }
 
   async function handleCopy() {
     try {
@@ -86,6 +94,17 @@ export default function GameMenu({ sessionCode, onLeave }) {
           ) : (
             <ul className="py-1 text-sm">
               <li>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-zinc-200 hover:bg-white/5"
+                  onClick={handleToggleMute}
+                >
+                  <span className="text-base">{muted ? '🔇' : '🔊'}</span>
+                  <span>{muted ? 'Sound off' : 'Sound on'}</span>
+                  <span className="ml-auto text-xs text-zinc-500">{muted ? 'Tap to unmute' : 'Tap to mute'}</span>
+                </button>
+              </li>
+              <li className="border-t border-white/5">
                 <button
                   type="button"
                   className="flex w-full px-4 py-3 text-left text-zinc-200 hover:bg-white/5"

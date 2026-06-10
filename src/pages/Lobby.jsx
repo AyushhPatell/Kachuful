@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import JoinRequestsPanel from '../components/lobby/JoinRequestsPanel.jsx'
+import { motion } from 'framer-motion'
 import PlayerAvatar from '../components/game/PlayerAvatar.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useJoinRequests } from '../hooks/useJoinRequests.js'
@@ -131,62 +130,79 @@ export default function Lobby() {
         <SessionCodeDisplay code={code} />
       </motion.div>
 
-      <AnimatePresence>
-        {isOwner && joinRequests.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm text-amber-200"
-          >
-            {joinRequests.length} player{joinRequests.length === 1 ? '' : 's'} waiting to join
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      <div className={`grid gap-4 ${isOwner ? 'md:grid-cols-2' : ''}`}>
-        <div
+      {/* Join requests — full width, above players list */}
+      {isOwner && joinRequests.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl p-4"
-          style={{ background: 'rgba(24,28,23,0.85)', border: '1px solid rgba(255,255,255,0.08)' }}
+          style={{
+            background: 'rgba(245,158,11,0.1)',
+            border: '1px solid rgba(245,158,11,0.25)',
+          }}
         >
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-zinc-200">Players</h2>
-            <span className="text-xs text-zinc-500">{activeCount}/{MAX_PLAYERS} · need {MIN_PLAYERS}</span>
-          </div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-amber-400">
+            Join requests ({joinRequests.length})
+          </p>
           <ul className="space-y-2">
-            {players.map(player => (
-              <motion.li
-                key={player.id}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5"
-                style={{ background: 'rgba(255,255,255,0.04)' }}
-              >
-                <PlayerAvatar name={player.name} photoURL={player.photoURL} size="sm" />
-                <span className="flex-1 truncate text-sm text-zinc-200">{player.name}</span>
-                <span className="text-[10px] text-zinc-600">
-                  {player.id === session?.ownerId ? '👑 Host' : player.status}
-                </span>
-              </motion.li>
-            ))}
-            {!players.length && (
-              <li className="py-3 text-center text-sm text-zinc-600">
-                <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.5, repeat: Infinity }}>
-                  Waiting for players…
-                </motion.span>
+            {joinRequests.map(request => (
+              <li key={request.userId} className="flex items-center gap-3">
+                <PlayerAvatar name={request.name} size="sm" />
+                <span className="flex-1 truncate text-sm font-medium text-zinc-200">{request.name}</span>
+                <button
+                  onClick={() => handleAccept(request)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+                  style={{ background: 'linear-gradient(135deg, #c9963a, #a67828)' }}
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={() => handleReject(request.userId)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+                  style={{ background: 'rgba(239,68,68,0.8)' }}
+                >
+                  Reject
+                </button>
               </li>
-            )}
+            ))}
           </ul>
-        </div>
+        </motion.div>
+      )}
 
-        {isOwner && (
-          <JoinRequestsPanel
-            joinRequests={joinRequests}
-            newRequestPing={newRequestPing}
-            onAccept={handleAccept}
-            onReject={handleReject}
-          />
-        )}
+      {/* Players list — full width always */}
+      <div
+        className="rounded-2xl p-4"
+        style={{ background: 'rgba(24,28,23,0.85)', border: '1px solid rgba(255,255,255,0.08)' }}
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-200">Players</h2>
+          <span className="text-xs text-zinc-500">{activeCount}/{MAX_PLAYERS} · need {MIN_PLAYERS}</span>
+        </div>
+        <ul className="space-y-2">
+          {players.map(player => (
+            <motion.li
+              key={player.id}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5"
+              style={{ background: 'rgba(255,255,255,0.04)' }}
+            >
+              <PlayerAvatar name={player.name} photoURL={player.photoURL} size="sm" />
+              <span className="flex-1 truncate text-sm text-zinc-200">{player.name}</span>
+              <span className="text-[10px] text-zinc-600">
+                {player.id === session?.ownerId ? '👑 Host' : player.status}
+              </span>
+            </motion.li>
+          ))}
+          {!players.length && (
+            <li className="py-3 text-center text-sm text-zinc-600">
+              <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.5, repeat: Infinity }}>
+                Waiting for players…
+              </motion.span>
+            </li>
+          )}
+        </ul>
       </div>
 
       {!isOwner && pendingJoin && session?.status === 'lobby' && (

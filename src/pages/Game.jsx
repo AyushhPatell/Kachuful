@@ -23,6 +23,7 @@ import {
 import RoundScoreOverlay from '../components/game/RoundScoreOverlay.jsx'
 import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
 import { getCardsPerRound, getPlayableCards, isTrumpCard, resolveSarForRound } from '../lib/gameLogic.js'
+import { getLegalCalls } from '../lib/callValidation.js'
 import { getSeatPositions, orderPlayersForTable } from '../lib/seatLayout.js'
 import { ROUND_STATUS } from '../constants/game.js'
 import { playSound, unlockAudio } from '../lib/sounds.js'
@@ -344,6 +345,19 @@ export default function Game() {
     }
   }
 
+  function handleTimerExpire() {
+    if (!isMyTurn || busy) return
+    if (playingPhase && playableCards.length > 0) {
+      const card = playableCards[Math.floor(Math.random() * playableCards.length)]
+      handlePlayCard(card)
+    } else if (callingPhase && me?.call == null) {
+      const legal = getLegalCalls(cardsPerRound, players, currentUserId)
+      if (legal.length > 0) {
+        handleSubmitCall(legal[Math.floor(Math.random() * legal.length)])
+      }
+    }
+  }
+
   async function handleNextRound() {
     setBusy(true)
     setError('')
@@ -435,6 +449,7 @@ export default function Game() {
         sessionCode={code}
         callingPhase={callingPhase}
         dealerPlayerId={dealerPlayerId}
+        onTimerExpire={handleTimerExpire}
       />
 
       <RoundScoreOverlay
@@ -466,6 +481,20 @@ export default function Game() {
       >
         {callPicker}
       </BottomSheet>
+
+      {/* Reopen call picker button — appears when sheet was dismissed but it's still player's turn */}
+      {showCallPicker && !callSheetOpen ? (
+        <button
+          onClick={() => setCallSheetOpen(true)}
+          className="absolute bottom-[6rem] left-1/2 z-30 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg lg:hidden"
+          style={{
+            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+            boxShadow: '0 4px 20px rgba(245,158,11,0.45)',
+          }}
+        >
+          📋 Make your call
+        </button>
+      ) : null}
 
       {!isSpectator && callingPhase && me?.call == null && !isMyTurn ? (
         <div className="pointer-events-none absolute inset-x-4 bottom-[9.5rem] z-30 rounded-full bg-black/50 px-4 py-2 text-center text-xs text-zinc-300 backdrop-blur-sm sm:bottom-36">
