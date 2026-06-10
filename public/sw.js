@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kachuful-v1'
+const CACHE_NAME = 'kachuful-v2'
 
 // App shell files to cache on install
 const SHELL = [
