@@ -5,21 +5,23 @@ import { isMuted, playSound } from '../../lib/sounds.js'
 const DEFAULT_SECONDS = 40
 const URGENT_THRESHOLD = 10
 
-export default function TurnTimer({ isActive, resetKey, totalSeconds = DEFAULT_SECONDS, onExpire }) {
-  const [remaining, setRemaining] = useState(totalSeconds)
+export default function TurnTimer({ isActive, resetKey, totalSeconds = DEFAULT_SECONDS, initialSeconds, onExpire }) {
+  const startFrom = initialSeconds != null ? Math.min(initialSeconds, totalSeconds) : totalSeconds
+  const [remaining, setRemaining] = useState(startFrom)
   const expiredRef = useRef(false)
   const lastTickRef = useRef(null)
 
   useEffect(() => {
     expiredRef.current = false
     lastTickRef.current = null
-    setRemaining(totalSeconds)
+    const start = initialSeconds != null ? Math.min(initialSeconds, totalSeconds) : totalSeconds
+    setRemaining(start)
     if (!isActive) return undefined
     const interval = setInterval(() => {
       setRemaining(prev => prev <= 1 ? 0 : prev - 1)
     }, 1000)
     return () => clearInterval(interval)
-  }, [isActive, resetKey, totalSeconds])
+  }, [isActive, resetKey, totalSeconds, initialSeconds])
 
   useEffect(() => {
     if (remaining === 0 && isActive && !expiredRef.current) {

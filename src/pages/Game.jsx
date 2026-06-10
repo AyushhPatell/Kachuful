@@ -318,6 +318,24 @@ export default function Game() {
     }
   }, [flyPlay?.key])
 
+  // ── host auto-play for disconnected players ─────────────────────────────────
+  useEffect(() => {
+    if (!isOwner || !playingPhase) return undefined
+    const turnPlayerId = session?.currentTurn
+    if (!turnPlayerId || turnPlayerId === currentUserId) return undefined
+    const turnPlayer = players.find((p) => p.id === turnPlayerId)
+    if (!turnPlayer || turnPlayer.status !== 'disconnected') return undefined
+    const hand = turnPlayer.hand ?? []
+    const cardsOnTable = session?.cardsOnTable ?? []
+    const legalCards = getPlayableCards(hand, cardsOnTable)
+    if (legalCards.length === 0) return undefined
+    const timer = setTimeout(() => {
+      const card = legalCards[Math.floor(Math.random() * legalCards.length)]
+      playCard(code, turnPlayerId, card).catch(() => {})
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [isOwner, playingPhase, session?.currentTurn, session?.cardsOnTable, players, code, currentUserId])
+
   // ── handlers ────────────────────────────────────────────────────────────────
   async function handleAcceptJoin(request) {
     setError('')
@@ -458,6 +476,7 @@ export default function Game() {
         callingPhase={callingPhase}
         dealerPlayerId={dealerPlayerId}
         onTimerExpire={handleTimerExpire}
+        currentTurnStartedAt={session?.currentTurnStartedAt ?? null}
       />
 
       <RoundScoreOverlay
