@@ -57,6 +57,7 @@ export default function Game() {
   const [dealStep, setDealStep] = useState(0)
   const [flyPlay, setFlyPlay] = useState(null)
   const [callSheetOpen, setCallSheetOpen] = useState(false)
+  const [desktopCallOpen, setDesktopCallOpen] = useState(true)
 
   const lastTableLenRef = useRef(0)
   const localFlyRef = useRef(false)
@@ -120,7 +121,12 @@ export default function Game() {
 
   const showCallPicker = !isSpectator && callingPhase && me?.call == null && isMyTurn
 
-  useEffect(() => { setCallSheetOpen(showCallPicker) }, [showCallPicker])
+  useEffect(() => {
+    if (showCallPicker) {
+      setCallSheetOpen(true)
+      setDesktopCallOpen(true)
+    }
+  }, [showCallPicker])
 
   useEffect(() => {
     const unsubSession = subscribeToSession(code, setSession)
@@ -493,6 +499,7 @@ export default function Game() {
         </p>
       ) : null}
 
+      {/* Mobile: bottom sheet — non-dismissable so cards stay accessible below */}
       <BottomSheet
         open={callSheetOpen && showCallPicker}
         onClose={() => setCallSheetOpen(false)}
@@ -501,38 +508,65 @@ export default function Game() {
         {callPicker}
       </BottomSheet>
 
-      {/* Reopen call picker button — appears when sheet was dismissed but it's still player's turn */}
+      {/* Mobile: reopen pill — appears at bottom-right inside hand tray when sheet is dismissed */}
       {showCallPicker && !callSheetOpen ? (
         <button
           onClick={() => setCallSheetOpen(true)}
-          className="absolute left-1/2 z-30 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg lg:hidden"
+          className="absolute right-3 z-30 flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold text-white lg:hidden"
           style={{
-            bottom: 'max(9rem, calc(8rem + env(safe-area-inset-bottom)))',
+            bottom: 'max(7rem, calc(6.5rem + env(safe-area-inset-bottom)))',
             background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-            boxShadow: '0 4px 20px rgba(245,158,11,0.45)',
+            boxShadow: '0 4px 16px rgba(245,158,11,0.5)',
           }}
         >
-          📋 Make your call
+          📋 Call
         </button>
       ) : null}
 
+      {/* Mobile: opponent calling notice */}
       {!isSpectator && callingPhase && me?.call == null && !isMyTurn ? (
-        <div className="pointer-events-none absolute inset-x-4 bottom-[9.5rem] z-30 rounded-full bg-black/50 px-4 py-2 text-center text-xs text-zinc-300 backdrop-blur-sm sm:bottom-36">
+        <div className="pointer-events-none absolute inset-x-4 z-30 rounded-full bg-black/50 px-4 py-2 text-center text-xs text-zinc-300 backdrop-blur-sm lg:hidden"
+          style={{ bottom: 'max(7rem, calc(6.5rem + env(safe-area-inset-bottom)))' }}>
           {currentTurnPlayer?.name ?? 'Opponent'} is calling…
         </div>
       ) : null}
 
-      {/* Desktop call panel */}
+      {/* Desktop: collapsible call panel — bottom-right, doesn't cover hand */}
       {showCallPicker ? (
-        <div
-          className="absolute bottom-4 inset-x-4 z-20 hidden max-w-md rounded-2xl lg:mx-auto lg:block lg:left-1/2 lg:-translate-x-1/2"
-          style={{
-            background: 'linear-gradient(160deg, #1c201a, #111410)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            boxShadow: '0 16px 48px rgba(0,0,0,0.75)',
-          }}
-        >
-          {callPicker}
+        <div className="absolute bottom-4 right-4 z-20 hidden w-72 lg:block">
+          {desktopCallOpen ? (
+            <div
+              className="rounded-2xl"
+              style={{
+                background: 'linear-gradient(160deg, #1c201a, #111410)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                boxShadow: '0 16px 48px rgba(0,0,0,0.75)',
+              }}
+            >
+              <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-400/80">Your Call</span>
+                <button
+                  onClick={() => setDesktopCallOpen(false)}
+                  className="text-xs text-zinc-600 hover:text-zinc-300"
+                  title="Minimize"
+                >
+                  ▼
+                </button>
+              </div>
+              {callPicker}
+            </div>
+          ) : (
+            <button
+              onClick={() => setDesktopCallOpen(true)}
+              className="ml-auto flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-white"
+              style={{
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                boxShadow: '0 4px 20px rgba(245,158,11,0.45)',
+              }}
+            >
+              📋 Make your call
+            </button>
+          )}
         </div>
       ) : null}
     </div>
