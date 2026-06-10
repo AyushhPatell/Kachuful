@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti'
 import PlayerAvatar from '../components/game/PlayerAvatar.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { subscribeToPlayers, subscribeToSession } from '../firebase/sessions.js'
+import { rankPlayers } from '../lib/gameLogic.js'
 import { playSound } from '../lib/sounds.js'
 
 export default function FinalLeaderboard() {
@@ -19,16 +20,12 @@ export default function FinalLeaderboard() {
     return () => { unsubSession(); unsubPlayers() }
   }, [code])
 
-  // Build leaderboard from session history or player totalPoints
-  const sorted = [...players]
-    .filter(p => p.status !== 'spectator')
-    .sort((a, b) => (b.totalPoints ?? 0) - (a.totalPoints ?? 0))
-
-  const winner = sorted[0]
+  const ranked = rankPlayers(players.filter(p => p.status !== 'spectator'))
+  const winner = ranked[0]
   const isWinner = winner?.id === userId
 
   useEffect(() => {
-    if (!sorted.length) return
+    if (!ranked.length) return
     playSound('roundEnd')
     setTimeout(() => {
       confetti({
@@ -38,7 +35,10 @@ export default function FinalLeaderboard() {
         colors: ['#fbbf24', '#f59e0b', '#10b981', '#ffffff', '#34d399', '#60a5fa'],
       })
     }, 300)
-  }, [sorted.length > 0])
+  }, [ranked.length > 0])
+
+  // Check if any tie exists (same sessionScore, same roundsFailed)
+  const hasTies = ranked.some((p, i) => i > 0 && p.rank === ranked[i - 1].rank)
 
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-lg flex-col items-center gap-5 px-4 pb-10 pt-10 sm:px-6">
@@ -68,19 +68,16 @@ export default function FinalLeaderboard() {
       </motion.div>
 
       {/* Podium — top 3 */}
-      {sorted.length >= 3 && (
+      {ranked.length >= 3 && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
           className="flex w-full items-end justify-center gap-3"
         >
-          {/* 2nd */}
-          <PodiumSlot player={sorted[1]} rank={2} delay={0.25} userId={userId} />
-          {/* 1st */}
-          <PodiumSlot player={sorted[0]} rank={1} delay={0.1} userId={userId} />
-          {/* 3rd */}
-          <PodiumSlot player={sorted[2]} rank={3} delay={0.35} userId={userId} />
+          <PodiumSlot player={ranked[1]} rank={2} delay={0.25} userId={userId} />
+          <PodiumSlot player={ranked[0]} rank={1} delay={0.1} userId={userId} />
+          <PodiumSlot player={ranked[2]} rank={3} delay={0.35} userId={userId} />
         </motion.div>
       )}
 
@@ -89,17 +86,28 @@ export default function FinalLeaderboard() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.4 }}
-        className="w-full rounded-2xl overflow-hidden"
+        className="w-full overflow-hidden rounded-2xl"
         style={{
           background: 'rgba(24,28,23,0.9)',
           border: '1px solid rgba(255,255,255,0.08)',
         }}
       >
-        <div className="px-4 py-3 border-b border-white/5">
+        <div className="border-b border-white/5 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">All Players</p>
         </div>
-        {sorted.map((player, i) => {
+
+        {/* Column headers */}
+        <div className="flex items-center gap-3 border-b border-white/[0.04] px-4 py-1.5">
+          <span className="w-5" />
+          <span className="flex-1" />
+          <span className="w-14 text-right text-[10px] text-zinc-600">Score</span>
+          <span className="w-14 text-right text-[10px] text-zinc-600">Failed</span>
+        </div>
+
+        {ranked.map((player, i) => {
           const isMe = player.id === userId
+          const isTied = ranked.some((p, j) => j !== i && p.rank === player.rank)
+
           return (
             <motion.div
               key={player.id}
@@ -107,35 +115,55 @@ export default function FinalLeaderboard() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 + i * 0.06 }}
               className={`flex items-center gap-3 px-4 py-3 ${
-                i < sorted.length - 1 ? 'border-b border-white/5' : ''
+                i < ranked.length - 1 ? 'border-b border-white/5' : ''
               } ${isMe ? 'bg-amber-500/8' : ''}`}
             >
               <span
                 className="w-5 text-center text-sm font-bold"
-                style={{ color: i === 0 ? '#fbbf24' : i === 1 ? '#94a3b8' : i === 2 ? '#b87333' : '#555' }}
+                style={{ color: player.rank === 1 ? '#fbbf24' : player.rank === 2 ? '#94a3b8' : player.rank === 3 ? '#b87333' : '#555' }}
               >
-                {i + 1}
+                {player.rank}
               </span>
               <PlayerAvatar name={player.name} photoURL={player.photoURL} size="sm" />
               <span className={`flex-1 truncate text-sm font-medium ${isMe ? 'text-amber-200' : 'text-zinc-200'}`}>
                 {player.name}
                 {isMe && <span className="ml-1 text-[10px] text-zinc-500">(you)</span>}
+                {isTied && (
+                  <span className="ml-1.5 rounded bg-zinc-800 px-1 py-0.5 text-[9px] text-zinc-500">
+                    tie
+                  </span>
+                )}
               </span>
               <motion.span
                 initial={{ scale: 0.6, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.5 + i * 0.06, type: 'spring' }}
-                className={`text-sm font-bold ${i === 0 ? 'text-amber-300' : 'text-zinc-300'}`}
+                className={`w-14 text-right text-sm font-bold ${player.rank === 1 ? 'text-amber-300' : 'text-zinc-300'}`}
               >
-                {player.totalPoints ?? 0} pts
+                {player.sessionScore ?? 0}
               </motion.span>
+              <span className="w-14 text-right text-xs text-zinc-600">
+                {player.roundsFailed ?? 0} ✗
+              </span>
             </motion.div>
           )
         })}
-        {!sorted.length && (
+        {!ranked.length && (
           <p className="px-4 py-6 text-center text-sm text-zinc-600">Loading results…</p>
         )}
       </motion.div>
+
+      {/* Tie-break note */}
+      {hasTies && (
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.8 }}
+          className="text-center text-[11px] text-zinc-600"
+        >
+          Ties broken by fewer failed rounds (✗)
+        </motion.p>
+      )}
 
       {/* Session code */}
       <p className="text-xs text-zinc-600">
@@ -182,10 +210,9 @@ function PodiumSlot({ player, rank, delay, userId }) {
       <p className={`max-w-[70px] truncate text-center text-[11px] font-semibold ${isMe ? 'text-amber-200' : 'text-zinc-300'}`}>
         {player.name}
       </p>
-      <p className="text-xs font-bold text-amber-300">{player.totalPoints ?? 0} pts</p>
-      {/* Podium block */}
+      <p className="text-xs font-bold text-amber-300">{player.sessionScore ?? 0} pts</p>
       <div
-        className={`w-full ${heights[rank]} rounded-t-lg flex items-center justify-center text-lg`}
+        className={`w-full ${heights[rank]} flex items-center justify-center rounded-t-lg text-lg`}
         style={{ background: colors[rank] }}
       >
         {labels[rank]}

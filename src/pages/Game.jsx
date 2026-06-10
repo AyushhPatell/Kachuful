@@ -13,7 +13,11 @@ import {
   acknowledgeTrickReveal,
   advanceToNextRound,
   hasPendingJoinRequest,
+  kickPlayer,
+  markPlayerDisconnected,
+  pingPresence,
   playCard,
+  reconnectPlayer,
   rejectJoinRequest,
   submitCall,
   subscribeToMyJoinRequest,
@@ -27,6 +31,7 @@ import { getLegalCalls } from '../lib/callValidation.js'
 import { getSeatPositions, orderPlayersForTable } from '../lib/seatLayout.js'
 import { ROUND_STATUS } from '../constants/game.js'
 import { playSound, unlockAudio } from '../lib/sounds.js'
+import { EmojiPicker, ReactionFloaters, useEmojiReactions } from '../components/game/EmojiReactions.jsx'
 
 const TRICK_PAUSE_MS = 1200
 const COLLECT_MS = 700
@@ -58,6 +63,7 @@ export default function Game() {
   const prevRoundNumberRef = useRef(0)
 
   const isOwner = session?.ownerId === currentUserId
+  const reactionFloaters = useEmojiReactions(session, seated, currentUserId)
   const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
 
   const me = players.find((p) => p.id === currentUserId)
@@ -137,6 +143,11 @@ export default function Game() {
     if (!roundNumber) return undefined
     return subscribeToRound(code, roundNumber, setRound)
   }, [code, roundNumber])
+
+  // Navigate to leaderboard when session ends externally (e.g. vote passed)
+  useEffect(() => {
+    if (session?.status === 'ended') navigate(`/leaderboard/${code}`)
+  }, [session?.status, code, navigate])
 
   useEffect(() => {
     if (session?.lastTrickReveal?.at) setFrozenTrickReveal(session.lastTrickReveal)
@@ -226,6 +237,41 @@ export default function Game() {
     if ((session?.cardsOnTable ?? []).length === 0) lastTableLenRef.current = 0
   }, [session?.cardsOnTable?.length])
 
+  // ── presence heartbeat ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentUserId || !code || !me) return undefined
+    // Reconnect if returning to the page after disconnect
+    if (me.status === 'disconnected') {
+      reconnectPlayer(code, currentUserId).catch(() => {})
+    }
+    // Send heartbeat immediately, then every 30 s
+    pingPresence(code, currentUserId).catch(() => {})
+    const interval = setInterval(() => {
+      pingPresence(code, currentUserId).catch(() => {})
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [code, currentUserId, me?.status])
+
+  useEffect(() => {
+    if (!currentUserId || !code || !me) return undefined
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        markPlayerDisconnected(code, currentUserId).catch(() => {})
+      } else {
+        pingPresence(code, currentUserId).catch(() => {})
+      }
+    }
+    function handleBeforeUnload() {
+      markPlayerDisconnected(code, currentUserId).catch(() => {})
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [code, currentUserId, me])
+
   // ── sounds ──────────────────────────────────────────────────────────────────
   useEffect(() => { unlockAudio() }, [])
 
@@ -313,6 +359,13 @@ export default function Game() {
     }
   }
 
+  async function handleKickPlayer(targetUserId) {
+    setBusy(true); setError('')
+    try { await kickPlayer(code, targetUserId) }
+    catch (err) { setError(err.message) }
+    finally { setBusy(false) }
+  }
+
   async function handleNextRound() {
     setBusy(true); setError('')
     try {
@@ -356,11 +409,16 @@ export default function Game() {
       ) : null}
 
       {isSpectator ? (
-        <p className="z-20 shrink-0 bg-zinc-900/90 px-3 py-1.5 text-center text-xs text-zinc-400">
-          {pendingJoin && !me
-            ? 'Watching — ask the host to accept you for the next round.'
-            : 'Spectator — you will play from the next round.'}
-        </p>
+        <div className="z-20 shrink-0 flex items-center justify-center gap-2 bg-indigo-950/80 px-3 py-2 text-center text-xs backdrop-blur-sm"
+          style={{ borderBottom: '1px solid rgba(99,102,241,0.3)' }}>
+          <span className="text-indigo-300">👁 Spectating</span>
+          <span className="text-zinc-500">—</span>
+          <span className="text-zinc-400">
+            {pendingJoin && !me
+              ? 'Waiting for host to accept you. You will join the next round.'
+              : 'You will play from the next round.'}
+          </span>
+        </div>
       ) : null}
 
       <GameTable
@@ -404,10 +462,25 @@ export default function Game() {
         roundNumber={roundNumber}
         isOwner={isOwner}
         onNextRound={handleNextRound}
+        onKickPlayer={handleKickPlayer}
         onLeave={leaveSession}
         sessionCode={code}
         busy={busy}
+        round={round}
       />
+
+      {/* Emoji reaction floaters (absolute-positioned over the table) */}
+      <ReactionFloaters
+        floaters={reactionFloaters}
+        seatPositions={getSeatPositions(seated.length)}
+      />
+
+      {/* Emoji picker — bottom-left, above hand */}
+      {!isSpectator && (
+        <div className="absolute bottom-[max(7.5rem,calc(7.5rem+env(safe-area-inset-bottom)))] left-3 z-30 sm:bottom-36">
+          <EmojiPicker sessionCode={code} userId={currentUserId} disabled={tablePhase === 'round-scores'} />
+        </div>
+      )}
 
       {error ? (
         <p className="pointer-events-none absolute bottom-28 inset-x-4 z-40 rounded-lg bg-red-950/90 px-3 py-2 text-center text-xs text-red-100">
