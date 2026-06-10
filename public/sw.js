@@ -26,6 +26,9 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
+  // Only handle http/https requests
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return
+
   // Never intercept Firebase / Google APIs
   if (
     url.hostname.includes('firebaseio.com') ||
