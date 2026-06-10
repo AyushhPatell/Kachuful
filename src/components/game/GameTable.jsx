@@ -123,19 +123,21 @@ export default function GameTable({
       <TableSurface className="flex-1">
         {/* HUD */}
         <div className="absolute left-0 right-0 top-2 z-30 flex items-center justify-between gap-2 px-3 sm:top-3 sm:px-4">
-          <div
-            className="rounded-full px-3 py-1 text-[11px] font-medium text-emerald-100/90 backdrop-blur-sm"
-            style={{ background: 'rgba(0,0,0,0.38)', fontFamily: 'Cinzel, serif' }}
-          >
-            Round {roundNumber}
-            {cardsPerRound ? ` · ${cardsPerRound} card${cardsPerRound === 1 ? '' : 's'}` : ''}
-          </div>
           <div className="flex items-center gap-2">
+            <div
+              className="rounded-full px-3 py-1 text-[11px] font-medium text-emerald-100/90 backdrop-blur-sm"
+              style={{ background: 'rgba(0,0,0,0.38)', fontFamily: 'Cinzel, serif' }}
+            >
+              Round {roundNumber}
+              {cardsPerRound ? ` · ${cardsPerRound} card${cardsPerRound === 1 ? '' : 's'}` : ''}
+            </div>
             <TurnTimer
               isActive={localIsTurn && tablePhase === 'playing' && (!callingPhase || me?.call == null)}
               resetKey={`${roundNumber}-${currentTurn}`}
               onExpire={onTimerExpire}
             />
+          </div>
+          <div className="flex items-center gap-2">
             {sarInfo ? <SarBadge sar={sar} compact /> : null}
             {sessionCode ? <GameMenu sessionCode={sessionCode} onLeave={onLeave} /> : null}
           </div>

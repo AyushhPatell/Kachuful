@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { calculateRoundPoints } from '../../lib/gameLogic.js'
@@ -56,12 +56,13 @@ export default function RoundScoreOverlay({
   }, [show, roundNumber])
 
   // When vote passes, host ends session
+  const endingRef = useRef(false)
   useEffect(() => {
-    if (votePassed && isOwner && !endBusy) {
-      setEndBusy(true)
+    if (votePassed && isOwner && !endingRef.current) {
+      endingRef.current = true
       endSessionNow(sessionCode)
         .then(() => navigate(`/leaderboard/${sessionCode}`))
-        .catch(() => setEndBusy(false))
+        .catch(() => { endingRef.current = false })
     }
   }, [votePassed, isOwner])
 

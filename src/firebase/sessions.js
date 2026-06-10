@@ -802,7 +802,7 @@ export async function reconnectPlayer(code, userId) {
     const snap = await getDoc(playerRef(code, userId))
     if (!snap.exists()) return
     await updateDoc(playerRef(code, userId), {
-      status: snap.data().status === 'disconnected' ? 'spectator' : snap.data().status,
+      status: snap.data().status === 'disconnected' ? 'active' : snap.data().status,
       lastSeenAt: Date.now(),
     })
   } catch {
