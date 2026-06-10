@@ -6,13 +6,13 @@ function initials(name) {
 }
 
 const COLORS = [
-  'bg-rose-600',
-  'bg-amber-600',
-  'bg-emerald-600',
-  'bg-sky-600',
-  'bg-violet-600',
-  'bg-orange-600',
-  'bg-teal-600',
+  '#be123c',
+  '#b45309',
+  '#047857',
+  '#0369a1',
+  '#6d28d9',
+  '#c2410c',
+  '#0f766e',
 ]
 
 function colorForName(name) {
@@ -23,27 +23,33 @@ function colorForName(name) {
   return COLORS[Math.abs(hash) % COLORS.length]
 }
 
-export default function PlayerAvatar({ name, photoURL, size = 'md', className = '' }) {
+export default function PlayerAvatar({ name, photoURL, size = 'md', glow = false, className = '' }) {
   const sizes = {
-    sm: 'h-8 w-8 text-[10px] ring-2',
-    md: 'h-10 w-10 text-xs ring-2',
-    lg: 'h-12 w-12 text-sm ring-[3px]',
+    sm: { box: 'h-8 w-8', text: 'text-[10px]' },
+    md: { box: 'h-10 w-10', text: 'text-xs' },
+    lg: { box: 'h-12 w-12', text: 'text-sm' },
   }
-  const ring = 'ring-amber-900/40'
+  const s = sizes[size] ?? sizes.md
+
+  const glowStyle = glow
+    ? { boxShadow: '0 0 0 2.5px rgba(245,158,11,0.95), 0 0 14px rgba(245,158,11,0.5)' }
+    : { boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }
 
   if (photoURL) {
     return (
       <img
         src={photoURL}
         alt=""
-        className={`${sizes[size]} ${ring} shrink-0 rounded-full object-cover shadow-md ${className}`}
+        className={`${s.box} shrink-0 rounded-full object-cover transition-shadow duration-300 ${className}`}
+        style={glowStyle}
       />
     )
   }
 
   return (
     <div
-      className={`${sizes[size]} ${ring} flex shrink-0 items-center justify-center rounded-full font-semibold text-white shadow-md ${colorForName(name)} ${className}`}
+      className={`${s.box} ${s.text} flex shrink-0 items-center justify-center rounded-full font-bold text-white transition-shadow duration-300 ${className}`}
+      style={{ background: colorForName(name), ...glowStyle }}
       aria-hidden
     >
       {initials(name)}

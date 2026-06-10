@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion'
 import CardStackBadge from './CardStackBadge.jsx'
 import PlayerAvatar from './PlayerAvatar.jsx'
-import { ROUND_STATUS } from '../../constants/game.js'
 
 export default function SeatPod({
   player,
@@ -12,68 +11,112 @@ export default function SeatPod({
   handCount,
   receivingDeal,
   tablePhase,
-  roundStatus,
   callingPhase,
+  isDealer = false,
+  compact = false,
 }) {
-  const showCall =
-    roundStatus === ROUND_STATUS.CALLING || roundStatus === ROUND_STATUS.PLAYING
+  const isCalling = callingPhase && isTurn
+  const isActive = isTurn && !showRoundScores
 
   return (
-    <motion.div layout className="flex flex-col items-center" style={{ minWidth: 108 }}>
-      <div
-        className={`flex w-full flex-col items-center rounded-2xl px-2.5 pt-1.5 pb-1 transition-all ${
-          isTrickWinner
-            ? 'bg-amber-400/25 ring-2 ring-amber-300/90 shadow-lg shadow-amber-500/20'
-            : isTurn && !showRoundScores
-              ? 'bg-amber-500/20 ring-2 ring-amber-400/55 shadow-md shadow-amber-500/10'
-              : receivingDeal
-                ? 'bg-white/10 ring-1 ring-white/30'
-                : 'bg-black/20 ring-1 ring-white/10'
-        }`}
-      >
-        <PlayerAvatar name={player.name} photoURL={player.photoURL} size="md" />
+    <div className="flex flex-col items-center gap-1" style={{ width: compact ? 76 : 94 }}>
 
-        <p className="mt-1 max-w-[104px] truncate text-center text-[11px] font-medium text-emerald-50">
+      {/* Main pod */}
+      <motion.div
+        className="relative flex flex-col items-center rounded-xl px-2 pt-2 pb-1.5"
+        animate={isActive ? { scale: [1, 1.025, 1] } : { scale: 1 }}
+        transition={{ duration: 1.6, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
+        style={{
+          background: isTrickWinner
+            ? 'rgba(251,191,36,0.18)'
+            : isActive
+            ? 'rgba(245,158,11,0.14)'
+            : receivingDeal
+            ? 'rgba(255,255,255,0.07)'
+            : 'rgba(0,0,0,0.42)',
+          backdropFilter: 'blur(8px)',
+          border: isTrickWinner
+            ? '1.5px solid rgba(251,191,36,0.65)'
+            : isActive
+            ? '1.5px solid rgba(245,158,11,0.55)'
+            : '1px solid rgba(255,255,255,0.09)',
+          boxShadow: isActive
+            ? '0 0 22px rgba(245,158,11,0.32), 0 4px 16px rgba(0,0,0,0.4)'
+            : isTrickWinner
+            ? '0 0 18px rgba(251,191,36,0.35), 0 4px 14px rgba(0,0,0,0.4)'
+            : '0 4px 14px rgba(0,0,0,0.4)',
+          transition: 'background 0.3s, border 0.3s, box-shadow 0.3s',
+        }}
+      >
+        {/* Dealer chip */}
+        {isDealer && (
+          <div
+            className="absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold"
+            style={{
+              background: 'linear-gradient(135deg, #fbbf24, #d97706)',
+              border: '1.5px solid rgba(255,255,255,0.45)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.45)',
+              color: '#1a0e00',
+            }}
+          >
+            D
+          </div>
+        )}
+
+        <PlayerAvatar
+          name={player.name}
+          photoURL={player.photoURL}
+          size={compact ? 'sm' : 'md'}
+          glow={isActive}
+        />
+
+        <p className="mt-1 max-w-[80px] truncate text-center text-[10px] font-semibold leading-tight text-emerald-50">
           {player.name}
         </p>
 
         {showRoundScores ? (
           <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-1 space-y-0.5 text-center text-[10px] leading-tight text-emerald-100/90"
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mt-1 text-center leading-tight"
           >
-            <p>Call {player.call ?? 0}</p>
-            <p>Won {player.tricksWon ?? 0}</p>
-            <p className={roundPts > 0 ? 'font-semibold text-amber-300' : 'text-emerald-200/50'}>
-              {roundPts > 0 ? `+${roundPts} pts` : '0 pts'}
+            <p className="text-[9px] text-emerald-200/70">
+              {player.call ?? 0} called · {player.tricksWon ?? 0} won
+            </p>
+            <p
+              className={`text-[11px] font-bold ${roundPts > 0 ? 'text-amber-300' : 'text-zinc-500'}`}
+            >
+              {roundPts > 0 ? `+${roundPts}` : '0'} pts
             </p>
           </motion.div>
         ) : (
-          <div className="relative z-20 mt-1 w-full rounded-lg bg-black/45 px-2 py-1 text-center backdrop-blur-sm">
-            <p className="text-[10px] leading-snug text-emerald-100/90">
-              <span>{player.tricksWon ?? 0} won</span>
-              {isTurn && tablePhase === 'playing' ? (
-                <span className="font-medium text-amber-300"> · turn</span>
-              ) : null}
-            </p>
-            {showCall ? (
-              <p className="text-[10px] font-semibold leading-snug text-amber-100">
-                Call:{' '}
-                <span className="text-amber-200">
-                  {player.call != null ? player.call : '—'}
-                </span>
-              </p>
-            ) : null}
+          <div className="mt-0.5 flex flex-wrap items-center justify-center gap-1">
+            {(player.tricksWon ?? 0) > 0 && (
+              <span className="rounded-full bg-amber-500/22 px-1.5 py-0 text-[9px] font-semibold text-amber-200">
+                {player.tricksWon}✓
+              </span>
+            )}
+            {player.call != null && (
+              <span className="rounded-full bg-white/8 px-1.5 py-0 text-[9px] text-zinc-300">
+                /{player.call}
+              </span>
+            )}
+            {isCalling && (
+              <motion.span
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1.2, repeat: Infinity }}
+                className="text-[9px] font-medium uppercase tracking-wider text-amber-300"
+              >
+                calling…
+              </motion.span>
+            )}
           </div>
         )}
-      </div>
+      </motion.div>
 
       {!showRoundScores && handCount > 0 ? (
-        <div className="relative z-0 -mt-1 flex justify-center pt-0.5">
-          <CardStackBadge count={handCount} receiving={receivingDeal} />
-        </div>
+        <CardStackBadge count={handCount} receiving={receivingDeal} />
       ) : null}
-    </motion.div>
+    </div>
   )
 }
