@@ -181,7 +181,7 @@ export default function FinalLeaderboard() {
               boxShadow: '0 4px 20px rgba(201,150,58,0.3)',
             }}
           >
-            Play Again
+            Back to Home
           </motion.button>
         </Link>
       </div>
