@@ -200,7 +200,7 @@ export default function GameTable({
                         ? { opacity: 0 }
                         : { x: dealFly.flyX, y: dealFly.flyY, opacity: 0, scale: 0.5 }
                     }
-                    transition={{ duration: 0.36, ease: 'easeOut' }}
+                    transition={{ duration: 0.48, ease: 'easeOut' }}
                     className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
                   >
                     <PlayingCard faceDown small />
