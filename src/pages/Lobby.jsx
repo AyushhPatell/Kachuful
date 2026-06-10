@@ -27,6 +27,7 @@ function SessionCodeDisplay({ code }) {
   return (
     <div
       className="flex items-center justify-center gap-4 rounded-2xl px-5 py-4"
+<<<<<<< HEAD
       style={{
         background: 'rgba(201,150,58,0.1)',
         border: '1px solid rgba(201,150,58,0.25)',
@@ -38,6 +39,13 @@ function SessionCodeDisplay({ code }) {
           className="font-mono text-4xl font-bold tracking-[0.28em] text-amber-300"
           style={{ fontFamily: 'Cinzel, serif' }}
         >
+=======
+      style={{ background: 'rgba(201,150,58,0.1)', border: '1px solid rgba(201,150,58,0.25)' }}
+    >
+      <div>
+        <p className="mb-1 text-[10px] uppercase tracking-[0.2em] text-amber-500/70">Session Code</p>
+        <p className="font-mono text-4xl font-bold tracking-[0.28em] text-amber-300" style={{ fontFamily: 'Cinzel, serif' }}>
+>>>>>>> 6d43acd (Some Improvements)
           {code}
         </p>
       </div>
@@ -60,7 +68,6 @@ export default function Lobby() {
   const [players, setPlayers] = useState([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [newRequestPing, setNewRequestPing] = useState(false)
   const [pendingFromSubcollection, setPendingFromSubcollection] = useState(false)
 
   const currentUserId = userId
@@ -85,13 +92,6 @@ export default function Lobby() {
     if (session?.status === 'active' && (isPlayer || pendingJoin)) navigate(`/game/${code}`)
     if (session?.status === 'ended' && isPlayer) navigate(`/leaderboard/${code}`)
   }, [session?.status, isPlayer, pendingJoin, code, navigate])
-
-  useEffect(() => {
-    if (!isOwner || !session?.joinEventAt) return undefined
-    setNewRequestPing(true)
-    const timer = setTimeout(() => setNewRequestPing(false), 2500)
-    return () => clearTimeout(timer)
-  }, [isOwner, session?.joinEventAt, joinRequests.length])
 
   async function handleStart() {
     unlockAudio()
@@ -130,17 +130,24 @@ export default function Lobby() {
         <SessionCodeDisplay code={code} />
       </motion.div>
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 6d43acd (Some Improvements)
       {/* Join requests — full width, above players list */}
       {isOwner && joinRequests.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl p-4"
+<<<<<<< HEAD
           style={{
             background: 'rgba(245,158,11,0.1)',
             border: '1px solid rgba(245,158,11,0.25)',
           }}
+=======
+          style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)' }}
+>>>>>>> 6d43acd (Some Improvements)
         >
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-amber-400">
             Join requests ({joinRequests.length})
@@ -152,14 +159,22 @@ export default function Lobby() {
                 <span className="flex-1 truncate text-sm font-medium text-zinc-200">{request.name}</span>
                 <button
                   onClick={() => handleAccept(request)}
+<<<<<<< HEAD
                   className="rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+=======
+                  className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+>>>>>>> 6d43acd (Some Improvements)
                   style={{ background: 'linear-gradient(135deg, #c9963a, #a67828)' }}
                 >
                   Accept
                 </button>
                 <button
                   onClick={() => handleReject(request.userId)}
+<<<<<<< HEAD
                   className="rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+=======
+                  className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-white"
+>>>>>>> 6d43acd (Some Improvements)
                   style={{ background: 'rgba(239,68,68,0.8)' }}
                 >
                   Reject
@@ -233,7 +248,11 @@ export default function Lobby() {
         >
           {activeCount < MIN_PLAYERS
             ? `Need ${MIN_PLAYERS - activeCount} more player${MIN_PLAYERS - activeCount !== 1 ? 's' : ''}`
+<<<<<<< HEAD
             : 'Start Game →'}
+=======
+            : busy ? 'Starting…' : 'Start Game →'}
+>>>>>>> 6d43acd (Some Improvements)
         </motion.button>
       ) : (
         <p className="text-center text-sm text-zinc-500">

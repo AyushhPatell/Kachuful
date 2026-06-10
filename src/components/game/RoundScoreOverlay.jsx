@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import confetti from 'canvas-confetti'
@@ -7,12 +8,49 @@ import { playSound } from '../../lib/sounds.js'
 export default function RoundScoreOverlay({
   show,
   players,
+=======
+import { AnimatePresence, motion } from 'framer-motion'
+import PlayerAvatar from './PlayerAvatar.jsx'
+import { calculateRoundPoints } from '../../lib/gameLogic.js'
+
+function ScoreRow({ player, isMe }) {
+  const points = calculateRoundPoints(player.call ?? 0, player.tricksWon ?? 0)
+  const made = player.call === player.tricksWon
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -16 }}
+      animate={{ opacity: 1, x: 0 }}
+      className={`flex items-center gap-3 rounded-xl px-4 py-3 ${isMe ? 'ring-1 ring-amber-400/40' : ''}`}
+      style={{ background: isMe ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.04)' }}
+    >
+      <PlayerAvatar name={player.name} photoURL={player.photoURL} size="sm" />
+      <div className="flex-1 min-w-0">
+        <p className="truncate text-sm font-medium text-zinc-100">{player.name}</p>
+        <p className="text-xs text-zinc-500">
+          Called {player.call ?? '?'} · Won {player.tricksWon ?? 0}
+        </p>
+      </div>
+      <div className="text-right">
+        <p className={`text-lg font-bold ${made ? 'text-emerald-400' : 'text-red-400'}`}>
+          {made ? `+${points}` : '0'}
+        </p>
+        <p className="text-[10px] text-zinc-600">pts this round</p>
+      </div>
+    </motion.div>
+  )
+}
+
+export default function RoundScoreOverlay({
+  show,
+  players = [],
+>>>>>>> 6d43acd (Some Improvements)
   currentUserId,
   roundNumber,
   isOwner,
   onNextRound,
   busy,
 }) {
+<<<<<<< HEAD
   const me = players.find(p => p.id === currentUserId)
   const myPts = me ? calculateRoundPoints(me.call ?? 0, me.tricksWon ?? 0) : 0
   const madCall = me != null && (me.tricksWon ?? 0) >= (me.call ?? 0) && me.call != null
@@ -37,11 +75,17 @@ export default function RoundScoreOverlay({
     const pb = calculateRoundPoints(b.call ?? 0, b.tricksWon ?? 0)
     return pb - pa
   })
+=======
+  const sorted = [...players]
+    .filter(p => p.status !== 'spectator')
+    .sort((a, b) => (b.sessionScore ?? 0) - (a.sessionScore ?? 0))
+>>>>>>> 6d43acd (Some Improvements)
 
   return (
     <AnimatePresence>
       {show && (
         <motion.div
+<<<<<<< HEAD
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -134,10 +178,39 @@ export default function RoundScoreOverlay({
             {/* CTA */}
             <div className="px-4 pb-4 pt-2">
               {isOwner ? (
+=======
+          key="round-score-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(4,8,4,0.88)', backdropFilter: 'blur(8px)' }}
+        >
+          <motion.div
+            initial={{ scale: 0.9, y: 24 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.9, y: 24 }}
+            transition={{ type: 'spring', stiffness: 340, damping: 26 }}
+            className="w-full max-w-sm overflow-hidden rounded-2xl shadow-2xl"
+            style={{ background: 'rgba(14,18,14,0.98)', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            <div className="border-b border-white/8 px-5 py-4 text-center">
+              <p className="text-xs font-semibold uppercase tracking-widest text-amber-500/70">Round {roundNumber} Results</p>
+              <p className="mt-0.5 text-xl font-bold text-amber-300" style={{ fontFamily: 'Cinzel, serif' }}>Score Board</p>
+            </div>
+            <div className="space-y-2 p-4">
+              {sorted.map(p => (
+                <ScoreRow key={p.id} player={p} isMe={p.id === currentUserId} />
+              ))}
+            </div>
+            {isOwner && (
+              <div className="border-t border-white/8 px-4 pb-4 pt-3">
+>>>>>>> 6d43acd (Some Improvements)
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   disabled={busy}
                   onClick={onNextRound}
+<<<<<<< HEAD
                   className="w-full rounded-xl py-3 text-sm font-bold text-amber-950 disabled:opacity-40"
                   style={{
                     background: 'linear-gradient(135deg, #fbbf24, #d97706)',
@@ -152,6 +225,22 @@ export default function RoundScoreOverlay({
                 </p>
               )}
             </div>
+=======
+                  className="w-full rounded-xl py-3 text-sm font-bold text-white disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #c9963a, #a67828)', boxShadow: '0 4px 20px rgba(201,150,58,0.3)' }}
+                >
+                  {busy ? 'Starting…' : 'Next Round →'}
+                </motion.button>
+              </div>
+            )}
+            {!isOwner && (
+              <p className="pb-5 text-center text-xs text-zinc-600">
+                <motion.span animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }}>
+                  Waiting for host to continue…
+                </motion.span>
+              </p>
+            )}
+>>>>>>> 6d43acd (Some Improvements)
           </motion.div>
         </motion.div>
       )}

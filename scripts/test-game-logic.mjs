@@ -30,34 +30,36 @@ assert.equal(calculateRoundPoints(4, 4), 40)
 assert.equal(calculateRoundPoints(2, 2), 20)
 assert.equal(getSarForRound(0), 'Ka')
 
+// Ka = Kadi = spades; harshil plays 7♠ (trump) over ayush's Q♥ (non-trump)
 const harshilTrumpWins = [
   { userId: 'ayush', card: { suit: 'hearts', rank: 'Q', id: 'Q-hearts' } },
-  { userId: 'harshil', card: { suit: 'clubs', rank: '7', id: '7-clubs' } },
+  { userId: 'harshil', card: { suit: 'spades', rank: '7', id: '7-spades' } },
 ]
 assert.equal(evaluateTrickWinner(harshilTrumpWins, 'Ka').userId, 'harshil')
 assert.equal(calculateRoundPoints(3, 2), 0)
 assert.equal(calculateRoundPoints(2, 3), 0)
 
+// c plays A♠ (trump) — beats b's K♥ (led suit)
 const trick = [
   { userId: 'a', card: { suit: 'hearts', rank: '7', id: '7-hearts' } },
   { userId: 'b', card: { suit: 'hearts', rank: 'K', id: 'K-hearts' } },
-  { userId: 'c', card: { suit: 'clubs', rank: 'A', id: 'A-clubs' } },
+  { userId: 'c', card: { suit: 'spades', rank: 'A', id: 'A-spades' } },
 ]
 assert.equal(evaluateTrickWinner(trick, 'Ka').userId, 'c')
 
-// Low club still beats high non-trump when Ka (Kadi/clubs) is sar
+// Low trump (2♠) still beats high non-trump (A♦) when Ka (Kadi/spades) is sar
 const lowTrumpWins = [
   { userId: 'ayush', card: { suit: 'diamonds', rank: 'A', id: 'A-diamonds' } },
   { userId: 'brij', card: { suit: 'diamonds', rank: '5', id: '5-diamonds' } },
-  { userId: 'amazoon', card: { suit: 'clubs', rank: '2', id: '2-clubs' } },
+  { userId: 'amazoon', card: { suit: 'spades', rank: '2', id: '2-spades' } },
 ]
 assert.equal(evaluateTrickWinner(lowTrumpWins, 'Ka').userId, 'amazoon')
 
-// Highest trump wins among multiple sar cards
+// Highest trump wins among multiple sar (spades) cards: K♠ beats 10♠ and 7♠
 const twoTrumps = [
   { userId: 'a', card: { suit: 'spades', rank: '10', id: '10-spades' } },
-  { userId: 'b', card: { suit: 'clubs', rank: '7', id: '7-clubs' } },
-  { userId: 'c', card: { suit: 'clubs', rank: 'K', id: 'K-clubs' } },
+  { userId: 'b', card: { suit: 'spades', rank: '7', id: '7-spades' } },
+  { userId: 'c', card: { suit: 'spades', rank: 'K', id: 'K-spades' } },
 ]
 assert.equal(evaluateTrickWinner(twoTrumps, 'Ka').userId, 'c')
 

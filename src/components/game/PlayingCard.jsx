@@ -172,10 +172,15 @@ export function SarBadge({ sar, compact = false }) {
 
   if (compact) {
     return (
+<<<<<<< HEAD
       <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-900/40 bg-black/35 px-3 py-1 text-xs backdrop-blur-sm">
         <span className="font-semibold text-amber-200" style={{ fontFamily: 'Cinzel, serif' }}>
           Sar {info.name}
         </span>
+=======
+      <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-900/40 bg-black/30 px-3 py-1 text-xs backdrop-blur-sm">
+        <span className="font-semibold text-amber-200">Sar {info.name}</span>
+>>>>>>> 6d43acd (Some Improvements)
         <span className={`${info.color}`}>{info.symbol}</span>
       </div>
     )
