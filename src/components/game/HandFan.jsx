@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PlayingCard from './PlayingCard.jsx'
@@ -6,12 +5,6 @@ import { playSound } from '../../lib/sounds.js'
 import { isTrumpCard } from '../../lib/gameLogic.js'
 
 const isTouchDevice = typeof window !== 'undefined' && 'ontouchstart' in window
-=======
-import { useCallback, useState } from 'react'
-import { motion } from 'framer-motion'
-import PlayingCard from './PlayingCard.jsx'
-import { isTrumpCard } from '../../lib/gameLogic.js'
->>>>>>> 6d43acd (Some Improvements)
 
 export default function HandFan({
   cards,
@@ -29,7 +22,6 @@ export default function HandFan({
 }) {
   const [selectedId, setSelectedId] = useState(null)
 
-<<<<<<< HEAD
   // useCallback must be declared before any early returns to satisfy Rules of Hooks
   const handleCardClick = useCallback((card, canPlay) => {
     if (!canPlay) return
@@ -47,16 +39,6 @@ export default function HandFan({
     } else {
       playSound('cardPlay')
       onPlayCard(card)
-=======
-  // Must be declared BEFORE any early returns (Rules of Hooks)
-  const handleCardClick = useCallback((card, canPlay) => {
-    if (!canPlay) return
-    if (selectedId === card.id) {
-      setSelectedId(null)
-      onPlayCard?.(card)
-    } else {
-      setSelectedId(card.id)
->>>>>>> 6d43acd (Some Improvements)
     }
   }, [selectedId, onPlayCard])
 
@@ -64,15 +46,9 @@ export default function HandFan({
   if (!visible.length) return null
 
   const count = visible.length
-<<<<<<< HEAD
   const center = (count - 1) / 2
   const stepDeg = count === 1 ? 0 : count === 2 ? 13 : count <= 4 ? 11 : count <= 6 ? 8.5 : 6.5
   const stepPx  = count === 1 ? 0 : count === 2 ? 62 : count <= 3 ? 52 : count <= 5 ? 42 : count <= 7 ? 32 : 25
-=======
-  const stepDeg = count === 1 ? 0 : count === 2 ? 13 : count <= 4 ? 11 : count <= 6 ? 8.5 : 6.5
-  const stepPx  = count === 1 ? 0 : count === 2 ? 62 : count <= 3 ? 52 : count <= 5 ? 42 : count <= 7 ? 32 : 25
-  const center = (count - 1) / 2
->>>>>>> 6d43acd (Some Improvements)
 
   return (
     <div
@@ -124,12 +100,7 @@ export default function HandFan({
         const isHidden = hiddenCardId === card.id
         const canPlay = playableIds.has(card.id) && !faceDown && !busy && isMyTurn
         const showFace = faceUpAfterDeal && !faceDown
-<<<<<<< HEAD
         const isSelected = selectedId === card.id
-=======
-        const isSelected = selectedId === card.id && canPlay
-        const isTrump = showFace && isTrumpCard(card, sar)
->>>>>>> 6d43acd (Some Improvements)
 
         if (isHidden) return null
 
@@ -141,39 +112,20 @@ export default function HandFan({
             key={card.id}
             className="absolute bottom-0 origin-bottom"
             style={{
-<<<<<<< HEAD
               zIndex: isSelected ? count + 5 : index,
               transform: `translateX(${tx}px) rotate(${rotate}deg)`,
             }}
             initial={reducedMotion ? false : { opacity: 0, y: 55, scale: 0.82 }}
             animate={{ opacity: 1, y: liftY, scale: cardScale }}
             transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-=======
-              zIndex: isSelected ? count + 10 : index,
-              transform: `translateX(${tx}px) rotate(${rotate}deg)`,
-            }}
-            initial={reducedMotion ? false : { opacity: 0, y: 40 }}
-            animate={{
-              opacity: 1,
-              y: isSelected ? -22 : canPlay ? -6 : 0,
-            }}
-            transition={{ type: 'spring', stiffness: 320, damping: 26 }}
->>>>>>> 6d43acd (Some Improvements)
           >
             <PlayingCard
               card={faceDown ? null : card}
               faceDown={faceDown || !showFace}
-<<<<<<< HEAD
               onClick={canPlay ? () => handleCardClick(card, canPlay) : undefined}
               selected={isSelected || (canPlay && isMyTurn && !isTouchDevice)}
               isTrump={showFace && isTrumpCard(card, sar)}
               hand
-=======
-              hand
-              onClick={canPlay ? () => handleCardClick(card, canPlay) : undefined}
-              selected={isSelected}
-              isTrump={isTrump}
->>>>>>> 6d43acd (Some Improvements)
             />
           </motion.div>
         )

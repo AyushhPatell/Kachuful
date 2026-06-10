@@ -2,16 +2,12 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { SAR_INFO } from '../../constants/game.js'
 import { calculateRoundPoints, isTrumpCard } from '../../lib/gameLogic.js'
-<<<<<<< HEAD
 import {
   getSeatHandCount,
   getSeatPositions,
   getTrickCardOffset,
   orderPlayersForTable,
 } from '../../lib/seatLayout.js'
-=======
-import { getSeatHandCount, getSeatPositions, orderPlayersForTable } from '../../lib/seatLayout.js'
->>>>>>> 6d43acd (Some Improvements)
 import GameMenu from './GameMenu.jsx'
 import HandFan from './HandFan.jsx'
 import PlayingCard, { DeckStack, SarBadge } from './PlayingCard.jsx'
@@ -97,21 +93,14 @@ export default function GameTable({
   const localIsTurn = currentTurn === currentUserId
 
   function cardAnimate(play, seatIndex) {
-<<<<<<< HEAD
     const trickOffset = getTrickCardOffset(seatIndex, seated.length)
-=======
->>>>>>> 6d43acd (Some Improvements)
     if (reducedMotion) {
       if (isCollect) return { opacity: 0, scale: 0.5, x: trickOffset.x, y: trickOffset.y }
       return { opacity: 1, x: trickOffset.x, y: trickOffset.y, scale: 1 }
     }
-<<<<<<< HEAD
     if (isCollect) {
       return { x: 0, y: 0, scale: 0.12, opacity: 0, transition: { duration: 0.5 } }
     }
-=======
-    if (isCollect) return { x: 0, y: 0, scale: 0.12, opacity: 0, transition: { duration: 0.5 } }
->>>>>>> 6d43acd (Some Improvements)
     if (isTrickPhase) {
       return {
         x: winnerFly.flyX,
@@ -216,13 +205,8 @@ export default function GameTable({
 
           {!isDealing && (isCollect || centerCards.length > 0) ? (
             <div className="relative h-28 w-full sm:h-32">
-<<<<<<< HEAD
               {centerCards.map(play => {
                 const seatIndex = seated.findIndex(p => p.id === play.userId)
-=======
-              {centerCards.map((play, idx) => {
-                const seatIndex = seated.findIndex((p) => p.id === play.userId)
->>>>>>> 6d43acd (Some Improvements)
                 const trump = isTrumpCard(play.card, sar ?? trickReveal?.sar)
                 const isFlyingHere = flyPlay?.card?.id === play.card.id
                 if (isFlyingHere) return null
@@ -273,10 +257,7 @@ export default function GameTable({
             </div>
           ) : null}
 
-<<<<<<< HEAD
           {/* Trick winner announcement */}
-=======
->>>>>>> 6d43acd (Some Improvements)
           <AnimatePresence>
             {isTrickPhase && trickReveal?.winnerName ? (
               <motion.div

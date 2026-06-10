@@ -20,12 +20,10 @@ function CardBack({ className = '' }) {
         boxShadow: '0 4px 16px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08)',
       }}
     >
-      {/* Inner gold border frame */}
       <div
         className="absolute inset-[3px] rounded"
         style={{ border: '1px solid rgba(200,165,90,0.32)' }}
       />
-      {/* Diamond trellis */}
       <div
         className="absolute inset-[4px] rounded"
         style={{
@@ -33,7 +31,6 @@ function CardBack({ className = '' }) {
           backgroundSize: '10px 10px',
         }}
       />
-      {/* Center spade emblem */}
       <div className="absolute inset-0 flex items-center justify-center">
         <span style={{ fontSize: '1.1em', color: 'rgba(200,165,90,0.65)', lineHeight: 1 }}>♠</span>
       </div>
@@ -41,7 +38,6 @@ function CardBack({ className = '' }) {
   )
 }
 
-// Card size variants
 const SIZES = {
   small: {
     w: 'w-[2.85rem] sm:w-[3.1rem]',
@@ -124,7 +120,6 @@ export default function PlayingCard({
           : '0 4px 16px rgba(0,0,0,0.48), 0 1px 3px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.95)',
       }}
     >
-      {/* Trump green tint overlay */}
       {isTrump && (
         <div
           className="pointer-events-none absolute inset-0 rounded-lg opacity-[0.12]"
@@ -133,13 +128,11 @@ export default function PlayingCard({
       )}
 
       <div className={`flex h-full flex-col ${sz.p}`} style={{ color: suitColor }}>
-        {/* Top-left corner */}
         <div className="flex flex-col items-start leading-[1]">
           <span className={`${sz.rankSize} font-bold`}>{card.rank}</span>
           <span className={`${sz.rankSize} leading-[1]`}>{sym}</span>
         </div>
 
-        {/* Center */}
         <div className="flex flex-1 items-center justify-center">
           {isFace ? (
             <div className="flex flex-col items-center gap-0.5">
@@ -156,7 +149,6 @@ export default function PlayingCard({
           )}
         </div>
 
-        {/* Bottom-right corner (rotated) */}
         <div className="flex flex-col items-end rotate-180 leading-[1]">
           <span className={`${sz.rankSize} font-bold`}>{card.rank}</span>
           <span className={`${sz.rankSize} leading-[1]`}>{sym}</span>
@@ -172,15 +164,10 @@ export function SarBadge({ sar, compact = false }) {
 
   if (compact) {
     return (
-<<<<<<< HEAD
       <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-900/40 bg-black/35 px-3 py-1 text-xs backdrop-blur-sm">
         <span className="font-semibold text-amber-200" style={{ fontFamily: 'Cinzel, serif' }}>
           Sar {info.name}
         </span>
-=======
-      <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-900/40 bg-black/30 px-3 py-1 text-xs backdrop-blur-sm">
-        <span className="font-semibold text-amber-200">Sar {info.name}</span>
->>>>>>> 6d43acd (Some Improvements)
         <span className={`${info.color}`}>{info.symbol}</span>
       </div>
     )
@@ -198,7 +185,6 @@ export function SarBadge({ sar, compact = false }) {
 export function DeckStack({ className = '' }) {
   return (
     <div className={`relative h-16 w-11 sm:h-20 sm:w-14 ${className}`}>
-      {/* Shadow layers */}
       <div className="absolute -right-2 -top-2 h-full w-full scale-90 opacity-50">
         <CardBack className="h-full w-full" />
       </div>

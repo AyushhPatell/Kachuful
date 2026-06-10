@@ -21,7 +21,6 @@ import {
   subscribeToRound,
   subscribeToSession,
 } from '../firebase/sessions.js'
-import RoundScoreOverlay from '../components/game/RoundScoreOverlay.jsx'
 import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
 import { getCardsPerRound, getPlayableCards, isTrumpCard, resolveSarForRound } from '../lib/gameLogic.js'
 import { getLegalCalls } from '../lib/callValidation.js'
@@ -211,11 +210,9 @@ export default function Game() {
     if ((session?.cardsOnTable ?? []).length === 0) lastTableLenRef.current = 0
   }, [session?.cardsOnTable?.length])
 
-<<<<<<< HEAD
-  // Unlock audio on mount (satisfies browser autoplay policy)
+  // ── sounds ──────────────────────────────────────────────────────────────────
   useEffect(() => { unlockAudio() }, [])
 
-  // Sound: shuffle + deal when a new dealing phase starts
   const prevTablePhaseRef = useRef(null)
   useEffect(() => {
     if (tablePhase === 'dealing' && prevTablePhaseRef.current !== 'dealing') {
@@ -224,7 +221,6 @@ export default function Game() {
     prevTablePhaseRef.current = tablePhase
   }, [tablePhase])
 
-  // Sound: card deal tick on each deal step
   const prevDealStepRef = useRef(0)
   useEffect(() => {
     if (tablePhase === 'dealing' && dealStep > prevDealStepRef.current) {
@@ -233,7 +229,6 @@ export default function Game() {
     prevDealStepRef.current = dealStep
   }, [dealStep, tablePhase])
 
-  // Sound: your turn
   const prevIsMyTurnRef = useRef(false)
   useEffect(() => {
     if (isMyTurn && !prevIsMyTurnRef.current && tablePhase === 'playing') {
@@ -242,30 +237,6 @@ export default function Game() {
     prevIsMyTurnRef.current = isMyTurn
   }, [isMyTurn, tablePhase])
 
-  // Sound: trick won
-=======
-  // ── sounds ─────────────────────────────────────────────────────────────────
-  useEffect(() => { unlockAudio() }, [])
-
-  const prevTablePhaseRef = useRef(null)
-  useEffect(() => {
-    if (tablePhase === 'dealing' && prevTablePhaseRef.current !== 'dealing') playSound('shuffle')
-    prevTablePhaseRef.current = tablePhase
-  }, [tablePhase])
-
-  const prevDealStepRef = useRef(0)
-  useEffect(() => {
-    if (tablePhase === 'dealing' && dealStep > prevDealStepRef.current) playSound('cardDeal')
-    prevDealStepRef.current = dealStep
-  }, [dealStep, tablePhase])
-
-  const prevIsMyTurnRef = useRef(false)
-  useEffect(() => {
-    if (isMyTurn && !prevIsMyTurnRef.current && tablePhase === 'playing') playSound('yourTurn')
-    prevIsMyTurnRef.current = isMyTurn
-  }, [isMyTurn, tablePhase])
-
->>>>>>> 6d43acd (Some Improvements)
   const prevTrickRevealRef = useRef(null)
   useEffect(() => {
     if (trickReveal?.at && trickReveal.at !== prevTrickRevealRef.current) {
@@ -274,21 +245,13 @@ export default function Game() {
     }
   }, [trickReveal?.at])
 
-<<<<<<< HEAD
-  // Sound: trump played (when a trump card flies in)
   useEffect(() => {
     if (flyPlay?.card && isTrumpCard(flyPlay.card, sar)) {
       playSound('trumpPlay')
     }
   }, [flyPlay?.key])
 
-=======
-  useEffect(() => {
-    if (flyPlay?.card && isTrumpCard(flyPlay.card, sar)) playSound('trumpPlay')
-  }, [flyPlay?.key])
-
-  // ── handlers ───────────────────────────────────────────────────────────────
->>>>>>> 6d43acd (Some Improvements)
+  // ── handlers ────────────────────────────────────────────────────────────────
   async function handleAcceptJoin(request) {
     setError('')
     try { await acceptJoinRequest(code, request) }
@@ -328,17 +291,6 @@ export default function Game() {
       handlePlayCard(card)
     } else if (callingPhase && me?.call == null) {
       const legal = getLegalCalls(cardsPerRound, players, currentUserId)
-      if (legal.length > 0) handleSubmitCall(legal[Math.floor(Math.random() * legal.length)])
-    }
-  }
-
-  function handleTimerExpire() {
-    if (!isMyTurn || busy) return
-    if (playingPhase && playableCards.length > 0) {
-      const card = playableCards[Math.floor(Math.random() * playableCards.length)]
-      handlePlayCard(card)
-    } else if (callingPhase && me?.call == null) {
-      const legal = getLegalCalls(cardsPerRound, players, currentUserId)
       if (legal.length > 0) {
         handleSubmitCall(legal[Math.floor(Math.random() * legal.length)])
       }
@@ -355,11 +307,6 @@ export default function Game() {
     finally { setBusy(false) }
   }
 
-<<<<<<< HEAD
-  const showRoundScores = tablePhase === 'round-scores'
-
-=======
->>>>>>> 6d43acd (Some Improvements)
   const handVisible =
     !isSpectator &&
     me?.hand?.length &&
@@ -379,11 +326,7 @@ export default function Game() {
   ) : null
 
   return (
-<<<<<<< HEAD
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#080a07]">
-=======
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#080a07]" onClick={unlockAudio}>
->>>>>>> 6d43acd (Some Improvements)
       {isOwner && joinRequests.length > 0 ? (
         <div className="z-20 shrink-0 border-b border-amber-500/25 bg-amber-950/95 px-3 py-2">
           <JoinRequestsPanel
@@ -468,11 +411,7 @@ export default function Game() {
         {callPicker}
       </BottomSheet>
 
-<<<<<<< HEAD
       {/* Reopen call picker button — appears when sheet was dismissed but it's still player's turn */}
-=======
-      {/* Reopen call picker — mobile only, appears when sheet was dismissed */}
->>>>>>> 6d43acd (Some Improvements)
       {showCallPicker && !callSheetOpen ? (
         <button
           onClick={() => setCallSheetOpen(true)}
@@ -492,10 +431,7 @@ export default function Game() {
         </div>
       ) : null}
 
-<<<<<<< HEAD
-=======
       {/* Desktop call panel */}
->>>>>>> 6d43acd (Some Improvements)
       {showCallPicker ? (
         <div className="absolute bottom-4 inset-x-4 z-20 hidden max-w-md lg:mx-auto lg:block lg:left-1/2 lg:-translate-x-1/2">
           {callPicker}
