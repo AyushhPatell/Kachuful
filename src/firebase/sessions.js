@@ -479,7 +479,7 @@ export async function submitCall(code, roundNumber, userId, call) {
     transaction.update(playerRef(code, userId), { call })
 
     const updatedPlayers = players.map((p) => (p.id === userId ? { ...p, call } : p))
-    const nextCaller = getNextCaller(turnOrder, updatedPlayers)
+    const nextCaller = getNextCaller(turnOrder, updatedPlayers, userId)
 
     if (nextCaller) {
       transaction.update(sessionsRef(code), { currentTurn: nextCaller, currentTurnStartedAt: Date.now() })

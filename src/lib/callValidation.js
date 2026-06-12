@@ -37,9 +37,20 @@ export function getCommittedCallsSum(players) {
     .reduce((s, p) => s + p.call, 0)
 }
 
-export function getNextCaller(turnOrder, players) {
-  return turnOrder.find((id) => {
+// Start from the player AFTER currentCallerId (clockwise). Without this, the
+// function always returns turnOrder[0], making Ayush (first joiner) always the
+// second caller regardless of who the dealer is.
+export function getNextCaller(turnOrder, players, currentCallerId) {
+  const n = turnOrder.length
+  const startIdx = currentCallerId != null
+    ? (turnOrder.indexOf(currentCallerId) + 1) % n
+    : 0
+  for (let step = 0; step < n; step++) {
+    const id = turnOrder[(startIdx + step) % n]
     const player = players.find((p) => p.id === id)
-    return player && (player.call === null || player.call === undefined)
-  })
+    if (player && player.status !== 'spectator' && (player.call === null || player.call === undefined)) {
+      return id
+    }
+  }
+  return null
 }
