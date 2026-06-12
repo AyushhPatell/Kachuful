@@ -37,7 +37,6 @@ import { EmojiPicker, ReactionFloaters, useEmojiReactions } from '../components/
 
 const TRICK_PAUSE_MS = 1200
 const COLLECT_MS = 700
-const DEAL_CARD_MS = 600
 const PLAY_FLY_MS = 400
 
 export default function Game() {
@@ -64,6 +63,7 @@ export default function Game() {
   const lastTableLenRef = useRef(0)
   const localFlyRef = useRef(false)
   const prevRoundNumberRef = useRef(0)
+  const playersRef = useRef(players)
 
   const isOwner = session?.ownerId === currentUserId
   const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
@@ -72,6 +72,8 @@ export default function Game() {
   const pendingJoin = hasPendingJoinRequest(session, currentUserId) || pendingFromSubcollection
   const roundNumber = session?.currentRound ?? 0
   const cardsPerRound = session ? getCardsPerRound(roundNumber, session.maxRound) : 0
+  // Adaptive deal speed: 650ms for 1 card, ~290ms for 8 cards (52ms per extra card)
+  const dealCardMs = Math.max(290, 650 - (cardsPerRound - 1) * 52)
   const isMyTurn = session?.currentTurn === currentUserId
   const isSpectator = me?.status === 'spectator' || (pendingJoin && !me)
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
@@ -219,9 +221,9 @@ export default function Game() {
   useEffect(() => {
     if (tablePhase !== 'dealing' || !dealSequence.length) return undefined
     if (dealStep >= dealSequence.length) { setTablePhase('playing'); return undefined }
-    const timer = setTimeout(() => setDealStep((s) => s + 1), DEAL_CARD_MS)
+    const timer = setTimeout(() => setDealStep((s) => s + 1), dealCardMs)
     return () => clearTimeout(timer)
-  }, [tablePhase, dealStep, dealSequence.length])
+  }, [tablePhase, dealStep, dealSequence.length, dealCardMs])
 
   useEffect(() => {
     const table = session?.cardsOnTable ?? []
@@ -328,15 +330,22 @@ export default function Game() {
   }, [flyPlay?.key])
 
   // ── host auto-play for disconnected players ─────────────────────────────────
-  // Deps use primitive values (string IDs / status strings) instead of the
-  // `players` array so that heartbeat-triggered reference changes don't reset
-  // the 3-second timer before it fires.
+  // Keep a ref so timer callbacks always see the latest players without
+  // needing it as a dep (which would reset the 3-second timer on every heartbeat)
+  useEffect(() => { playersRef.current = players }, [players])
+
+  // ── host auto-play / auto-call for disconnected players ──────────────────────
+  // Playing phase: after 3 s, play a random legal card.
+  // Deps use primitive strings so heartbeat-caused `players` reference changes
+  // don't reset the timer (the real bug that prevented auto-play from firing).
   useEffect(() => {
     if (!isOwner || !playingPhase) return undefined
     if (!currentTurnPlayerId || currentTurnPlayerId === currentUserId) return undefined
-    if (currentTurnPlayerStatus !== 'disconnected') return undefined
-    const turnPlayer = players.find((p) => p.id === currentTurnPlayerId)
-    const legalCards = getPlayableCards(turnPlayer?.hand ?? [], session?.cardsOnTable ?? [])
+    const turnPlayer = playersRef.current.find((p) => p.id === currentTurnPlayerId)
+    if (!turnPlayer) return undefined
+    const isGone = currentTurnPlayerStatus === 'disconnected' || isPlayerOffline(turnPlayer)
+    if (!isGone) return undefined
+    const legalCards = getPlayableCards(turnPlayer.hand ?? [], session?.cardsOnTable ?? [])
     if (legalCards.length === 0) return undefined
     const timer = setTimeout(() => {
       const card = legalCards[Math.floor(Math.random() * legalCards.length)]
@@ -345,9 +354,39 @@ export default function Game() {
     return () => clearTimeout(timer)
   }, [isOwner, playingPhase, currentTurnPlayerId, currentTurnPlayerStatus, code, currentUserId])
 
+  // Calling phase: after 3 s, submit a random legal call.
+  useEffect(() => {
+    if (!isOwner || !callingPhase) return undefined
+    if (!currentTurnPlayerId || currentTurnPlayerId === currentUserId) return undefined
+    const turnPlayer = playersRef.current.find((p) => p.id === currentTurnPlayerId)
+    if (!turnPlayer) return undefined
+    const isGone = currentTurnPlayerStatus === 'disconnected' || isPlayerOffline(turnPlayer)
+    if (!isGone) return undefined
+    const legalOptions = getLegalCalls(cardsPerRound, playersRef.current, currentTurnPlayerId)
+    if (legalOptions.length === 0) return undefined
+    const timer = setTimeout(() => {
+      const call = legalOptions[Math.floor(Math.random() * legalOptions.length)]
+      submitCall(code, roundNumber, currentTurnPlayerId, call).catch(() => {})
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [isOwner, callingPhase, currentTurnPlayerId, currentTurnPlayerStatus, code, roundNumber, cardsPerRound, currentUserId])
+
+  // Polling fallback: if the current turn player closed their tab (no explicit
+  // disconnect written to Firestore), detect the stale heartbeat every 15 s and
+  // mark them disconnected so the effects above fire.
+  useEffect(() => {
+    if (!isOwner || !currentTurnPlayerId || currentTurnPlayerId === currentUserId) return undefined
+    if (!playingPhase && !callingPhase) return undefined
+    const interval = setInterval(() => {
+      const p = playersRef.current.find((pl) => pl.id === currentTurnPlayerId)
+      if (p && isPlayerOffline(p) && p.status !== 'disconnected') {
+        markPlayerDisconnected(code, currentTurnPlayerId).catch(() => {})
+      }
+    }, 15_000)
+    return () => clearInterval(interval)
+  }, [isOwner, playingPhase, callingPhase, currentTurnPlayerId, code, currentUserId])
+
   // ── auto host-election when host tab closes without clicking Leave ───────────
-  // If the host's heartbeat goes stale and I'm the first active player by
-  // joinOrder, I claim the host role so join requests keep working.
   useEffect(() => {
     if (!session || session.ownerId === currentUserId) return
     const host = players.find((p) => p.id === session.ownerId)
