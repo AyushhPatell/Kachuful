@@ -35,7 +35,7 @@ import { ROUND_STATUS } from '../constants/game.js'
 import { playSound, unlockAudio } from '../lib/sounds.js'
 import { EmojiPicker, ReactionFloaters, useEmojiReactions } from '../components/game/EmojiReactions.jsx'
 
-const TRICK_PAUSE_MS = 1200
+const TRICK_PAUSE_MS = 4000
 const COLLECT_MS = 700
 const PLAY_FLY_MS = 400
 
