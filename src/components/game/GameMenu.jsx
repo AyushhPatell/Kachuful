@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { isMuted, setMuted } from '../../lib/sounds.js'
 import { enablePushNotifications, getPushPermission } from '../../lib/push.js'
@@ -98,32 +99,33 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
         </svg>
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              key="backdrop"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40"
-              onClick={handleClose}
-            />
+      {createPortal(
+        <AnimatePresence>
+          {open && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                key="backdrop"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[100]"
+                onClick={handleClose}
+              />
 
-            {/* Panel — uses position:fixed so it escapes any parent overflow:hidden */}
-            <motion.div
-              key="menu"
-              initial={{ opacity: 0, scale: 0.9, y: -6 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -6 }}
-              transition={{ duration: 0.14 }}
-              className="fixed z-50 w-52 overflow-hidden rounded-xl shadow-2xl"
-              style={{
-                ...panelStyle,
-                background: 'rgba(14,18,14,0.97)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                backdropFilter: 'blur(12px)',
-              }}
-            >
+              {/* Panel — portaled to body so position:fixed escapes any CSS transform context */}
+              <motion.div
+                key="menu"
+                initial={{ opacity: 0, scale: 0.9, y: -6 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: -6 }}
+                transition={{ duration: 0.14 }}
+                className="fixed z-[101] w-52 overflow-hidden rounded-xl shadow-2xl"
+                style={{
+                  ...panelStyle,
+                  background: 'rgba(14,18,14,0.97)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  backdropFilter: 'blur(12px)',
+                }}
+              >
               <AnimatePresence mode="wait">
                 {/* ── MAIN VIEW ── */}
                 {view === VIEW_MAIN && (
@@ -152,6 +154,11 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
                       <div className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-500">
                         <span className="text-base">🔕</span>
                         <span>Notifications blocked in browser settings</span>
+                      </div>
+                    ) : pushPermission === 'ios-standalone-required' ? (
+                      <div className="flex w-full items-start gap-3 px-4 py-2.5 text-sm text-zinc-400">
+                        <span className="mt-0.5 shrink-0 text-base">📱</span>
+                        <span className="text-[11px] leading-snug">Add Kachuful to your Home Screen, then enable notifications from there</span>
                       </div>
                     ) : pushPermission === 'unsupported' ? (
                       <div className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-500">
@@ -312,6 +319,7 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
           </>
         )}
       </AnimatePresence>
+      , document.body)}
     </div>
   )
 }

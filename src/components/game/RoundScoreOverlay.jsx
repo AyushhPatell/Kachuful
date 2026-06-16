@@ -70,13 +70,14 @@ export default function RoundScoreOverlay({
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.92, y: 12 }}
             transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-            className="w-full max-w-sm overflow-hidden rounded-2xl"
+            className="w-full max-w-sm overflow-hidden rounded-2xl [&::-webkit-scrollbar]:hidden"
             style={{
               background: 'linear-gradient(160deg, #1c201a, #111410)',
               border: '1px solid rgba(255,255,255,0.09)',
               boxShadow: '0 32px 80px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.04)',
               maxHeight: 'calc(100svh - 24px)',
               overflowY: 'auto',
+              scrollbarWidth: 'none',
             }}
           >
             {/* Header */}

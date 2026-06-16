@@ -16,6 +16,7 @@ export function isIosNonStandalone() {
 }
 
 export function getPushPermission() {
+  if (isIosNonStandalone()) return 'ios-standalone-required'
   if (typeof Notification === 'undefined') return 'unsupported'
   return Notification.permission
 }
