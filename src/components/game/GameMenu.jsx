@@ -3,15 +3,17 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { isMuted, setMuted } from '../../lib/sounds.js'
 
 // Sub-views inside the menu panel
-const VIEW_MAIN    = 'main'
-const VIEW_CODE    = 'code'
-const VIEW_CONFIRM = 'confirm'
+const VIEW_MAIN        = 'main'
+const VIEW_CODE        = 'code'
+const VIEW_CONFIRM     = 'confirm'
+const VIEW_END_CONFIRM = 'end-confirm'
 
-export default function GameMenu({ sessionCode, onLeave }) {
+export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteActive = false, onInitiateEndVote }) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(VIEW_MAIN)
   const [muted, setMutedState] = useState(() => isMuted())
   const [copied, setCopied] = useState(false)
+  const [endingBusy, setEndingBusy] = useState(false)
 
   function handleOpen() {
     setView(VIEW_MAIN)
@@ -34,6 +36,18 @@ export default function GameMenu({ sessionCode, onLeave }) {
     navigator.clipboard?.writeText(sessionCode)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleConfirmEndSession() {
+    setEndingBusy(true)
+    try {
+      await onInitiateEndVote?.()
+      handleClose()
+    } catch {
+      // surfaced via the vote banner if it fails to start
+    } finally {
+      setEndingBusy(false)
+    }
   }
 
   return (
@@ -103,6 +117,19 @@ export default function GameMenu({ sessionCode, onLeave }) {
                       <span>Session code</span>
                       <span className="ml-auto text-zinc-500">›</span>
                     </button>
+
+                    {isOwner && !voteActive && (
+                      <>
+                        <div className="mx-3 my-1 h-px bg-white/10" />
+                        <button
+                          onClick={() => setView(VIEW_END_CONFIRM)}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-amber-300 transition-colors hover:bg-white/8"
+                        >
+                          <span className="text-base">🛑</span>
+                          <span>End session</span>
+                        </button>
+                      </>
+                    )}
 
                     <div className="mx-3 my-1 h-px bg-white/10" />
 
@@ -179,6 +206,38 @@ export default function GameMenu({ sessionCode, onLeave }) {
                         style={{ background: 'rgba(239,68,68,0.8)', border: '1px solid rgba(239,68,68,0.4)' }}
                       >
                         Leave
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* ── END SESSION CONFIRMATION VIEW ── */}
+                {view === VIEW_END_CONFIRM && (
+                  <motion.div
+                    key="end-confirm"
+                    initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }}
+                    transition={{ duration: 0.12 }}
+                    className="p-4"
+                  >
+                    <p className="mb-1 text-center text-sm font-semibold text-zinc-100">End session for everyone?</p>
+                    <p className="mb-4 text-center text-xs text-zinc-500">
+                      This starts a vote. The game ends as soon as a majority of players agree.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setView(VIEW_MAIN)}
+                        className="flex-1 rounded-lg py-2 text-xs font-semibold text-zinc-300 transition-colors hover:bg-white/8"
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleConfirmEndSession}
+                        disabled={endingBusy}
+                        className="flex-1 rounded-lg py-2 text-xs font-bold text-white transition-colors disabled:opacity-40"
+                        style={{ background: 'rgba(245,158,11,0.85)', border: '1px solid rgba(245,158,11,0.4)' }}
+                      >
+                        {endingBusy ? 'Starting…' : 'Start vote'}
                       </button>
                     </div>
                   </motion.div>

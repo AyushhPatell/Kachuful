@@ -13,7 +13,9 @@ import {
   acknowledgeTrickReveal,
   advanceToNextRound,
   claimHostRole,
+  endSessionNow,
   hasPendingJoinRequest,
+  initiateEndVote,
   isPlayerOffline,
   kickPlayer,
   markPlayerDisconnected,
@@ -31,9 +33,11 @@ import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
 import { getCardsPerRound, getPlayableCards, isTrumpCard, resolveSarForRound } from '../lib/gameLogic.js'
 import { getLegalCalls } from '../lib/callValidation.js'
 import { getSeatPositions, orderPlayersForTable } from '../lib/seatLayout.js'
+import { getEndVoteTally } from '../lib/voting.js'
 import { ROUND_STATUS } from '../constants/game.js'
 import { playSound, unlockAudio } from '../lib/sounds.js'
 import { EmojiPicker, ReactionFloaters, useEmojiReactions } from '../components/game/EmojiReactions.jsx'
+import EndVoteBanner from '../components/game/EndVoteBanner.jsx'
 
 const TRICK_PAUSE_MS = 4000
 const COLLECT_MS = 700
@@ -110,6 +114,7 @@ export default function Game() {
   )
   const roundComplete = round?.status === ROUND_STATUS.COMPLETE
   const scoresReady = Boolean(round?.results && Object.keys(round.results).length > 0)
+  const endVotePassed = round?.endVoteActive === true && getEndVoteTally(round, players).passed
   // Show overlay if in round-scores phase OR if we reloaded mid-round-complete (tablePhase reset to 'playing')
   const showRoundScores =
     tablePhase === 'round-scores' ||
@@ -166,6 +171,17 @@ export default function Game() {
   useEffect(() => {
     if (session?.status === 'ended') navigate(`/leaderboard/${code}`)
   }, [session?.status, code, navigate])
+
+  // When an end-session vote reaches majority, the host (and only the host)
+  // finalizes it. Works whether the vote was started mid-round or post-round.
+  const endingRef = useRef(false)
+  useEffect(() => {
+    if (!isOwner || !endVotePassed || endingRef.current) return
+    endingRef.current = true
+    endSessionNow(code)
+      .then(() => navigate(`/leaderboard/${code}`))
+      .catch(() => { endingRef.current = false })
+  }, [isOwner, endVotePassed, code, navigate])
 
   useEffect(() => {
     if (session?.lastTrickReveal?.at) setFrozenTrickReveal(session.lastTrickReveal)
@@ -444,6 +460,12 @@ export default function Game() {
     }
   }
 
+  async function handleInitiateEndVote() {
+    setError('')
+    try { await initiateEndVote(code, roundNumber) }
+    catch (err) { setError(err.message) }
+  }
+
   async function handleKickPlayer(targetUserId) {
     setBusy(true); setError('')
     try { await kickPlayer(code, targetUserId) }
@@ -454,9 +476,8 @@ export default function Game() {
   async function handleNextRound() {
     setBusy(true); setError('')
     try {
-      const result = await advanceToNextRound(code)
+      await advanceToNextRound(code)
       setFrozenTrickReveal(null); setDealStep(0); setTablePhase('dealing')
-      if (result.ended) navigate(`/leaderboard/${code}`)
     } catch (err) { setError(err.message) }
     finally { setBusy(false) }
   }
@@ -506,6 +527,21 @@ export default function Game() {
         </div>
       ) : null}
 
+      {/* Mid-round end-session vote — the post-round overlay shows its own copy */}
+      {round?.endVoteActive && !showRoundScores ? (
+        <div className="z-20 shrink-0 pt-2">
+          <EndVoteBanner
+            round={round}
+            players={players}
+            currentUserId={currentUserId}
+            isOwner={isOwner}
+            roundNumber={roundNumber}
+            sessionCode={code}
+            compact
+          />
+        </div>
+      ) : null}
+
       <GameTable
         className="min-h-0 flex-1"
         players={players}
@@ -539,6 +575,7 @@ export default function Game() {
         dealerPlayerId={dealerPlayerId}
         onTimerExpire={handleTimerExpire}
         currentTurnStartedAt={session?.currentTurnStartedAt ?? null}
+        onInitiateEndVote={handleInitiateEndVote}
       />
 
       <RoundScoreOverlay

@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { calculateRoundPoints } from '../../lib/gameLogic.js'
-import { isPlayerOffline, initiateEndVote, castVote, cancelEndVote, endSessionNow } from '../../firebase/sessions.js'
+import { isPlayerOffline, initiateEndVote } from '../../firebase/sessions.js'
 import { playSound } from '../../lib/sounds.js'
+import EndVoteBanner from './EndVoteBanner.jsx'
 import GameMenu from './GameMenu.jsx'
 import PlayerAvatar from './PlayerAvatar.jsx'
 
@@ -20,24 +20,13 @@ export default function RoundScoreOverlay({
   busy,
   round,
 }) {
-  const navigate = useNavigate()
   const [endBusy, setEndBusy] = useState(false)
-  const [voteBusy, setVoteBusy] = useState(false)
-  const [myVote, setMyVote] = useState(null)
 
   const me = players?.find(p => p.id === currentUserId)
   const myPts = me ? calculateRoundPoints(me.call ?? 0, me.tricksWon ?? 0) : 0
   const madCall = me != null && (me.tricksWon ?? 0) >= (me.call ?? 0) && me.call != null
 
   const endVoteActive = round?.endVoteActive === true
-  const votes = round?.votes ?? {}
-  const activePlayers = players?.filter(p => p.status === 'active') ?? []
-  const endVoteCount = Object.values(votes).filter(v => v === 'end').length
-  const continueVoteCount = Object.values(votes).filter(v => v === 'continue').length
-  const totalVoters = activePlayers.length
-  const majority = Math.floor(totalVoters / 2) + 1
-  const votePassed = endVoteCount >= majority
-  const voteFailed = continueVoteCount > totalVoters - majority
 
   // Offline players (for host kick UI)
   const offlinePlayers = players?.filter(p =>
@@ -50,22 +39,6 @@ export default function RoundScoreOverlay({
     playSound('roundEnd')
   }, [show])
 
-  // Reset local vote state when overlay is re-shown for a new round
-  useEffect(() => {
-    if (show) setMyVote(null)
-  }, [show, roundNumber])
-
-  // When vote passes, host ends session
-  const endingRef = useRef(false)
-  useEffect(() => {
-    if (votePassed && isOwner && !endingRef.current) {
-      endingRef.current = true
-      endSessionNow(sessionCode)
-        .then(() => navigate(`/leaderboard/${sessionCode}`))
-        .catch(() => { endingRef.current = false })
-    }
-  }, [votePassed, isOwner])
-
   const sorted = [...(players ?? [])].sort((a, b) => {
     const pa = calculateRoundPoints(a.call ?? 0, a.tricksWon ?? 0)
     const pb = calculateRoundPoints(b.call ?? 0, b.tricksWon ?? 0)
@@ -77,21 +50,6 @@ export default function RoundScoreOverlay({
     try { await initiateEndVote(sessionCode, roundNumber) }
     catch (err) { console.error(err) }
     finally { setEndBusy(false) }
-  }
-
-  async function handleCancelVote() {
-    setEndBusy(true)
-    try { await cancelEndVote(sessionCode, roundNumber) }
-    catch (err) { console.error(err) }
-    finally { setEndBusy(false) }
-  }
-
-  async function handleCastVote(vote) {
-    setVoteBusy(true)
-    setMyVote(vote)
-    try { await castVote(sessionCode, roundNumber, currentUserId, vote) }
-    catch (err) { setMyVote(null); console.error(err) }
-    finally { setVoteBusy(false) }
   }
 
   return (
@@ -226,59 +184,14 @@ export default function RoundScoreOverlay({
 
             {/* Vote to end — active state */}
             {endVoteActive && (
-              <div
-                className="mx-3 mb-2 rounded-xl px-3 py-2.5"
-                style={{
-                  background: 'rgba(245,158,11,0.07)',
-                  border: '1px solid rgba(245,158,11,0.25)',
-                }}
-              >
-                <p className="mb-1 text-center text-[11px] font-semibold text-amber-300">
-                  {isOwner ? 'Waiting for votes…' : 'Host wants to end the game'}
-                </p>
-                <p className="mb-2.5 text-center text-[10px] text-zinc-500">
-                  {endVoteCount} end · {continueVoteCount} continue · {totalVoters - endVoteCount - continueVoteCount} waiting
-                </p>
-
-                {!isOwner && !myVote && (
-                  <div className="flex gap-2">
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      disabled={voteBusy}
-                      onClick={() => handleCastVote('end')}
-                      className="flex-1 rounded-xl py-2.5 text-xs font-bold text-white disabled:opacity-40"
-                      style={{ background: 'linear-gradient(135deg, #c9963a, #a67828)' }}
-                    >
-                      End Game
-                    </motion.button>
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      disabled={voteBusy}
-                      onClick={() => handleCastVote('continue')}
-                      className="flex-1 rounded-xl py-2.5 text-xs font-bold text-zinc-200 disabled:opacity-40"
-                      style={{ background: 'rgba(255,255,255,0.09)', border: '1px solid rgba(255,255,255,0.12)' }}
-                    >
-                      Continue
-                    </motion.button>
-                  </div>
-                )}
-
-                {!isOwner && myVote && (
-                  <p className="text-center text-xs text-zinc-400">
-                    You voted: <span className={myVote === 'end' ? 'text-amber-300' : 'text-zinc-300'}>{myVote === 'end' ? 'End Game' : 'Continue'}</span>
-                  </p>
-                )}
-
-                {isOwner && (
-                  <button
-                    onClick={handleCancelVote}
-                    disabled={endBusy}
-                    className="w-full text-center text-[11px] text-zinc-600 underline disabled:opacity-40"
-                  >
-                    Cancel vote
-                  </button>
-                )}
-              </div>
+              <EndVoteBanner
+                round={round}
+                players={players}
+                currentUserId={currentUserId}
+                isOwner={isOwner}
+                roundNumber={roundNumber}
+                sessionCode={sessionCode}
+              />
             )}
 
             {/* CTA buttons */}

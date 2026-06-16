@@ -617,27 +617,32 @@ export async function acknowledgeTrickReveal(code) {
   if (roundData?.status === ROUND_STATUS.COMPLETE) return
 
   await updateDoc(roundRef(code, roundNumber), { status: ROUND_STATUS.COMPLETE })
-  await finalizeRoundScores(code, roundNumber)
+  await finalizeRoundScores(code, roundNumber, session.turnOrder ?? [])
 }
 
-async function finalizeRoundScores(code, roundNumber) {
+// Score only the players who were actually dealt into this round (its
+// turnOrder snapshot) — not every non-spectator player in the session.
+// Otherwise a player who disconnected in an earlier round keeps getting
+// re-scored every subsequent round off their stale call/tricksWon instead
+// of their score freezing at the point they left.
+async function finalizeRoundScores(code, roundNumber, turnOrder) {
   const roundSnap = await getDoc(roundRef(code, roundNumber))
   const existingResults = roundSnap.data()?.results ?? {}
   if (Object.keys(existingResults).length > 0) return
 
-  const activePlayers = await getActivePlayers(code)
   const results = {}
 
-  for (const p of activePlayers) {
-    const snap = await getDoc(playerRef(code, p.id))
-    const data = snap.data() ?? {}
+  for (const id of turnOrder) {
+    const snap = await getDoc(playerRef(code, id))
+    if (!snap.exists()) continue
+    const data = snap.data()
     const call = data.call ?? 0
     const won = data.tricksWon ?? 0
     const points = calculateRoundPoints(call, won)
 
-    results[p.id] = { call, won, points }
+    results[id] = { call, won, points }
 
-    await updateDoc(playerRef(code, p.id), {
+    await updateDoc(playerRef(code, id), {
       sessionScore: (data.sessionScore ?? 0) + points,
       roundsFailed: (data.roundsFailed ?? 0) + (points === 0 ? 1 : 0),
     })
@@ -677,21 +682,23 @@ export async function advanceToNextRound(code) {
     }
   }
 
+  // Players who joined mid-game spectate the rest of that round, then take
+  // their seat at the end of the rotation starting next round.
+  const allPlayerDocs = await getDocs(playersCollection(code))
+  const newSpectators = allPlayerDocs.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((p) => p.status === 'spectator')
+    .sort((a, b) => a.joinOrder - b.joinOrder)
+  playersForRound.push(...newSpectators)
+
   if (playersForRound.length < MIN_PLAYERS) {
     throw new Error('Not enough active players to continue. Wait for players to reconnect.')
   }
 
-  const maxRound = session.maxRound ?? getMaxRound(playersForRound.length)
-  const cycleLength = 2 * maxRound - 1
-
-  if (roundNumber >= cycleLength) {
-    await updateDoc(sessionsRef(code), { status: SESSION_STATUS.ENDED })
-    await saveSessionSummary(code, session, allPlayers)
-    return { ended: true }
-  }
-
+  // Rounds cycle 1→maxRound→1 indefinitely — only an explicit "End Session"
+  // (host-initiated vote) stops the game, never the round count itself.
   await beginRound(code, roundNumber + 1, playersForRound, session.firstDealerIndex ?? 0)
-  return { ended: false, nextRound: roundNumber + 1 }
+  return { nextRound: roundNumber + 1 }
 }
 
 export function isAcceptedPlayer(players, userId) {
@@ -814,14 +821,18 @@ export async function reconnectPlayer(code, userId) {
   }
 }
 
-/** Host kicks a player from the session. */
+/**
+ * Host removes an offline player from the rotation. This freezes their
+ * status as 'disconnected' rather than deleting their doc, so their score
+ * still appears in the final leaderboard instead of vanishing.
+ */
 export async function kickPlayer(code, targetUserId) {
   if (!isFirebaseConfigured) throw new Error('Firebase not configured')
   const userId = auth.currentUser?.uid
   const sessionSnap = await getDoc(sessionsRef(code))
   if (!sessionSnap.exists()) throw new Error('Session not found')
   if (sessionSnap.data().ownerId !== userId) throw new Error('Only the host can kick players')
-  await deleteDoc(playerRef(code, targetUserId))
+  await updateDoc(playerRef(code, targetUserId), { status: 'disconnected' })
 }
 
 /**
