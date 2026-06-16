@@ -65,7 +65,7 @@ export function ReactionFloaters({ floaters, seatPositions }) {
             animate={{ opacity: 0, scale: 1.3, y: -60 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 1.8, ease: 'easeOut' }}
-            className="pointer-events-none absolute z-50 text-2xl"
+            className="pointer-events-none absolute z-50 text-6xl"
             style={{ left: x, top: y, transform: 'translate(-50%, -50%)' }}
           >
             {floater.emoji}

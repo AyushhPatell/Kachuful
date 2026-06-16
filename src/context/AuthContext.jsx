@@ -8,10 +8,17 @@ import { isFirebaseConfigured } from '../firebase/config.js'
 
 const AuthContext = createContext(null)
 
+// If sign-in bootstrap (redirect-result check + first auth-state callback)
+// hasn't resolved by this point, something's hung — show a reload option
+// instead of leaving the user stuck on "Loading…" forever. This matters most
+// on a home-screen-saved iOS app, which has no URL bar or pull-to-refresh.
+const AUTH_WATCHDOG_MS = 8000
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [displayName, setDisplayName] = useState('')
   const [authReady, setAuthReady] = useState(!isFirebaseConfigured)
+  const [authTimedOut, setAuthTimedOut] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -19,18 +26,24 @@ export function AuthProvider({ children }) {
     if (!isFirebaseConfigured) return undefined
 
     let unsubscribe = () => {}
+    const watchdog = setTimeout(() => setAuthTimedOut(true), AUTH_WATCHDOG_MS)
 
     completeGoogleRedirectSignIn()
       .catch(() => {})
       .finally(() => {
         unsubscribe = subscribeToAuth((firebaseUser) => {
+          clearTimeout(watchdog)
+          setAuthTimedOut(false)
           setUser(firebaseUser)
           setDisplayName(firebaseUser ? getCurrentDisplayName() : '')
           setAuthReady(true)
         })
       })
 
-    return () => unsubscribe()
+    return () => {
+      clearTimeout(watchdog)
+      unsubscribe()
+    }
   }, [])
 
   const value = useMemo(
@@ -40,6 +53,7 @@ export function AuthProvider({ children }) {
       photoURL: user?.photoURL ?? null,
       displayName,
       authReady,
+      authTimedOut,
       loading,
       setLoading,
       error,
@@ -47,7 +61,7 @@ export function AuthProvider({ children }) {
       isFirebaseConfigured,
       isSignedIn: Boolean(user),
     }),
-    [user, displayName, authReady, loading, error],
+    [user, displayName, authReady, authTimedOut, loading, error],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -22,6 +22,7 @@ import {
   pingPresence,
   playCard,
   reconnectPlayer,
+  recordAutoAction,
   rejectJoinRequest,
   submitCall,
   subscribeToMyJoinRequest,
@@ -372,9 +373,10 @@ export default function Game() {
     const timer = setTimeout(() => {
       const card = legalCards[Math.floor(Math.random() * legalCards.length)]
       playCard(code, currentTurnPlayerId, card).catch(() => {})
+      recordAutoAction(code, currentTurnPlayerId, roundNumber).catch(() => {})
     }, 3000)
     return () => clearTimeout(timer)
-  }, [isOwner, playingPhase, currentTurnPlayerId, currentTurnPlayerStatus, code, currentUserId])
+  }, [isOwner, playingPhase, currentTurnPlayerId, currentTurnPlayerStatus, code, currentUserId, roundNumber])
 
   // Calling phase: after 3 s, submit a random legal call.
   useEffect(() => {
@@ -389,6 +391,7 @@ export default function Game() {
     const timer = setTimeout(() => {
       const call = legalOptions[Math.floor(Math.random() * legalOptions.length)]
       submitCall(code, roundNumber, currentTurnPlayerId, call).catch(() => {})
+      recordAutoAction(code, currentTurnPlayerId, roundNumber).catch(() => {})
     }, 3000)
     return () => clearTimeout(timer)
   }, [isOwner, callingPhase, currentTurnPlayerId, currentTurnPlayerStatus, code, roundNumber, cardsPerRound, currentUserId])

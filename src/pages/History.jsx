@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext.jsx'
 import { fetchSessionHistory } from '../firebase/sessions.js'
 import PlayerAvatar from '../components/game/PlayerAvatar.jsx'
+import { SESSION_HISTORY_LIMIT } from '../constants/game.js'
 
-const HISTORY_LIMIT = 4
+const HISTORY_LIMIT = SESSION_HISTORY_LIMIT
 
 function timeAgo(ts) {
   if (!ts) return ''

@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getDatabase } from 'firebase/database'
 import { getFirestore } from 'firebase/firestore'
 
 function env(key) {
@@ -38,13 +37,11 @@ export const isFirebaseConfigured = Boolean(
 let app = null
 let auth = null
 let db = null
-let rtdb = null
 
 if (isFirebaseConfigured) {
   app = initializeApp(firebaseConfig)
   auth = getAuth(app)
   db = getFirestore(app)
-  rtdb = getDatabase(app)
 }
 
-export { app, auth, db, rtdb }
+export { app, auth, db }
