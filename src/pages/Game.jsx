@@ -40,6 +40,7 @@ import { EmojiPicker, ReactionFloaters, useEmojiReactions } from '../components/
 import EndVoteBanner from '../components/game/EndVoteBanner.jsx'
 
 const TRICK_PAUSE_MS = 4000
+const TRICK_FLY_MS = 600 // must match the fly transition duration in GameTable's cardAnimate
 const COLLECT_MS = 700
 const PLAY_FLY_MS = 400
 
@@ -190,20 +191,25 @@ export default function Game() {
   useEffect(() => {
     const reveal = session?.lastTrickReveal
     if (!reveal?.at) return undefined
+    // 'trick-won' = cards stay put on the table so everyone can see what was
+    // played; only after the pause do they fly to the winner ('trick-flying').
     setTablePhase('trick-won')
     const timers = []
+    const flyAt = TRICK_PAUSE_MS
+    const settledAt = TRICK_PAUSE_MS + TRICK_FLY_MS
+    timers.push(setTimeout(() => setTablePhase('trick-flying'), flyAt))
     if (reveal.endsRound) {
       timers.push(setTimeout(() => {
         acknowledgeTrickReveal(code).catch((err) => setError(err.message))
-      }, TRICK_PAUSE_MS))
-      timers.push(setTimeout(() => setTablePhase('collect'), TRICK_PAUSE_MS))
-      timers.push(setTimeout(() => setTablePhase('round-scores'), TRICK_PAUSE_MS + COLLECT_MS))
+      }, settledAt))
+      timers.push(setTimeout(() => setTablePhase('collect'), settledAt))
+      timers.push(setTimeout(() => setTablePhase('round-scores'), settledAt + COLLECT_MS))
     } else {
       timers.push(setTimeout(() => {
         acknowledgeTrickReveal(code)
           .then(() => { setTablePhase('playing'); setFrozenTrickReveal(null) })
           .catch((err) => setError(err.message))
-      }, TRICK_PAUSE_MS))
+      }, settledAt))
     }
     return () => timers.forEach(clearTimeout)
   }, [code, session?.lastTrickReveal?.at, session?.lastTrickReveal?.endsRound])
