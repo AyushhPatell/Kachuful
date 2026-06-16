@@ -75,7 +75,11 @@ export default function GameTable({
 
   const centerCards = trickReveal?.cards?.length ? trickReveal.cards : (cardsOnTable ?? [])
   const trickWinnerId = trickReveal?.winnerId
-  const isTrickPhase = tablePhase === 'trick-won'
+  // 'trick-won' = cards sit still on the table so everyone can see what was
+  // played; 'trick-flying' is the brief animation after that pause where
+  // they actually move toward the winner's seat.
+  const isTrickFlying = tablePhase === 'trick-flying'
+  const isTrickPhase = tablePhase === 'trick-won' || isTrickFlying
   const isCollect = tablePhase === 'collect'
   const isDealing = tablePhase === 'dealing'
   const dealComplete = !isDealing || dealStep >= dealSequence.length
@@ -106,7 +110,7 @@ export default function GameTable({
     if (isCollect) {
       return { x: 0, y: 0, scale: 0.12, opacity: 0, transition: { duration: 0.5 } }
     }
-    if (isTrickPhase) {
+    if (isTrickFlying) {
       return {
         x: winnerFly.flyX,
         y: winnerFly.flyY,
@@ -235,7 +239,7 @@ export default function GameTable({
                     initial={reducedMotion ? false : { scale: 0.55, opacity: 0 }}
                     animate={{
                       ...cardAnimate(play, seatIndex),
-                      rotate: isTrickPhase || isCollect ? 0 : rot,
+                      rotate: isTrickFlying || isCollect ? 0 : rot,
                     }}
                   >
                     <div
@@ -338,7 +342,7 @@ export default function GameTable({
               playableIds={playableIds}
               onPlayCard={onPlayCard}
               busy={busy}
-              dimmed={tablePhase === 'trick-won' || tablePhase === 'collect'}
+              dimmed={isTrickPhase || isCollect}
               hiddenCardId={hiddenCardId}
               reducedMotion={reducedMotion}
               isMyTurn={localIsTurn && tablePhase === 'playing'}
