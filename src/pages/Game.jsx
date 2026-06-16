@@ -80,8 +80,11 @@ export default function Game() {
   const pendingJoin = hasPendingJoinRequest(session, currentUserId) || pendingFromSubcollection
   const roundNumber = session?.currentRound ?? 0
   const cardsPerRound = session ? getCardsPerRound(roundNumber, session.maxRound) : 0
-  // Adaptive deal speed: 650ms for 1 card, ~290ms for 8 cards (52ms per extra card)
-  const dealCardMs = Math.max(290, 650 - (cardsPerRound - 1) * 52)
+  // Adaptive deal speed: front-loads more of the speed-up in the early
+  // rounds (650ms at 1 card → ~368ms by 4 cards) instead of a straight
+  // linear ramp that still felt slow by round 4, then flattens out toward
+  // the same ~290ms floor by round 8 as before.
+  const dealCardMs = Math.max(290, Math.round(290 + 360 * Math.pow(0.6, cardsPerRound - 1)))
   const isMyTurn = session?.currentTurn === currentUserId
   const isSpectator = me?.status === 'spectator' || (pendingJoin && !me)
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
