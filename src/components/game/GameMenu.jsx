@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { isMuted, setMuted } from '../../lib/sounds.js'
 import { enablePushNotifications, getPushPermission } from '../../lib/push.js'
@@ -10,6 +10,8 @@ const VIEW_CONFIRM     = 'confirm'
 const VIEW_END_CONFIRM = 'end-confirm'
 
 export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteActive = false, onInitiateEndVote }) {
+  const buttonRef = useRef(null)
+  const [panelStyle, setPanelStyle] = useState({})
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(VIEW_MAIN)
   const [muted, setMutedState] = useState(() => isMuted())
@@ -20,6 +22,19 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
   const [pushError, setPushError] = useState('')
 
   function handleOpen() {
+    // Calculate viewport-relative position so the panel uses position:fixed
+    // and can't be clipped by any ancestor's overflow:hidden.
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      const estimatedPanelHeight = 260
+      const spaceBelow = window.innerHeight - rect.bottom
+      if (spaceBelow < estimatedPanelHeight && rect.top > estimatedPanelHeight) {
+        // Not enough room below — open above the button
+        setPanelStyle({ bottom: window.innerHeight - rect.top + 8, right: window.innerWidth - rect.right })
+      } else {
+        setPanelStyle({ top: rect.bottom + 8, right: window.innerWidth - rect.right })
+      }
+    }
     setView(VIEW_MAIN)
     setOpen(true)
   }
@@ -70,6 +85,7 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         onClick={handleOpen}
         className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-300 hover:text-white"
         style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.12)' }}
@@ -93,15 +109,16 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
               onClick={handleClose}
             />
 
-            {/* Panel */}
+            {/* Panel — uses position:fixed so it escapes any parent overflow:hidden */}
             <motion.div
               key="menu"
               initial={{ opacity: 0, scale: 0.9, y: -6 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -6 }}
               transition={{ duration: 0.14 }}
-              className="absolute right-0 top-10 z-50 w-52 overflow-hidden rounded-xl shadow-2xl"
+              className="fixed z-50 w-52 overflow-hidden rounded-xl shadow-2xl"
               style={{
+                ...panelStyle,
                 background: 'rgba(14,18,14,0.97)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 backdropFilter: 'blur(12px)',
@@ -135,6 +152,11 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
                       <div className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-500">
                         <span className="text-base">🔕</span>
                         <span>Notifications blocked in browser settings</span>
+                      </div>
+                    ) : pushPermission === 'unsupported' ? (
+                      <div className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-500">
+                        <span className="text-base">🔕</span>
+                        <span>Notifications not supported</span>
                       </div>
                     ) : (
                       <button
