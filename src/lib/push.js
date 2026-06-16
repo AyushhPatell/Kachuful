@@ -23,10 +23,13 @@ export function getPushPermission() {
 export async function enablePushNotifications() {
   if (!isFirebaseConfigured) throw new Error('Firebase is not configured.')
   if (!VAPID_KEY) throw new Error('Push notifications are not set up yet.')
-  if (typeof Notification === 'undefined') throw new Error('Notifications are not supported in this browser.')
+  // iOS check must come before the Notification API check because Chrome on iOS
+  // doesn't expose window.Notification at all, giving the wrong "not supported"
+  // error instead of the actionable "add to Home Screen" message.
   if (isIosNonStandalone()) {
-    throw new Error('Add Kachuful to your Home Screen first, then enable notifications from there.')
+    throw new Error('On iOS, add Kachuful to your Home Screen first, then enable notifications from there.')
   }
+  if (typeof Notification === 'undefined') throw new Error('Notifications are not supported in this browser.')
   if (!(await isSupported())) {
     throw new Error('Push notifications are not supported in this browser.')
   }

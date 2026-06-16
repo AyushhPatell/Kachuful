@@ -72,6 +72,7 @@ export default function Game() {
   const localFlyRef = useRef(false)
   const prevRoundNumberRef = useRef(0)
   const playersRef = useRef(players)
+  const turnOrderRef = useRef(session?.turnOrder ?? [])
 
   const isOwner = session?.ownerId === currentUserId
   const { joinRequests, listenError } = useJoinRequests(code, session, isOwner)
@@ -80,11 +81,24 @@ export default function Game() {
   const pendingJoin = hasPendingJoinRequest(session, currentUserId) || pendingFromSubcollection
   const roundNumber = session?.currentRound ?? 0
   const cardsPerRound = session ? getCardsPerRound(roundNumber, session.maxRound) : 0
-  // Adaptive deal speed: front-loads more of the speed-up in the early
-  // rounds (650ms at 1 card → ~368ms by 4 cards) instead of a straight
-  // linear ramp that still felt slow by round 4, then flattens out toward
-  // the same ~290ms floor by round 8 as before.
-  const dealCardMs = Math.max(290, Math.round(290 + 360 * Math.pow(0.6, cardsPerRound - 1)))
+  // Adaptive deal speed: steps faster at even card counts going up (2→4→6→8),
+  // odd counts inherit the nearest even-count speed. On the way back down the
+  // reductions mirror at 6, 4, 2 (7 going down stays at 8-card speed).
+  const dealCardMs = (() => {
+    const dir = session?.roundDirection ?? 'up'
+    if (cardsPerRound <= 1) return 600
+    if (cardsPerRound >= 8) return 210
+    if (dir === 'up') {
+      if (cardsPerRound >= 6) return 285
+      if (cardsPerRound >= 4) return 390
+      return 500 // 2–3 cards
+    }
+    // going down — 7 stays at peak, reductions at 6, 4, 2
+    if (cardsPerRound >= 7) return 210
+    if (cardsPerRound >= 5) return 285
+    if (cardsPerRound >= 3) return 390
+    return 500 // 2 cards going down
+  })()
   const isMyTurn = session?.currentTurn === currentUserId
   const isSpectator = me?.status === 'spectator' || (pendingJoin && !me)
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
@@ -98,6 +112,14 @@ export default function Game() {
   const reactionFloaters = useEmojiReactions(session, seated, currentUserId)
 
   const activePlayerIds = useMemo(() => seated.map((p) => p.id), [seated])
+
+  // Only players who are in the current round's deal — avoids stale call data
+  // from disconnected players who were excluded from this round but whose
+  // Firestore docs still have a call value left over from last round.
+  const turnOrderPlayers = useMemo(
+    () => (session?.turnOrder ?? []).map((id) => players.find((p) => p.id === id)).filter(Boolean),
+    [players, session?.turnOrder],
+  )
 
   const dealSequence = useMemo(
     () => buildDealSequence(activePlayerIds, cardsPerRound, round?.dealerIndex ?? 0),
@@ -372,9 +394,10 @@ export default function Game() {
   }, [flyPlay?.key])
 
   // ── host auto-play for disconnected players ─────────────────────────────────
-  // Keep a ref so timer callbacks always see the latest players without
-  // needing it as a dep (which would reset the 3-second timer on every heartbeat)
+  // Keep refs so timer callbacks always see the latest players / turnOrder
+  // without needing them as deps (which would reset the 3-second timer on every heartbeat)
   useEffect(() => { playersRef.current = players }, [players])
+  useEffect(() => { turnOrderRef.current = session?.turnOrder ?? [] }, [session?.turnOrder])
 
   // ── host auto-play / auto-call for disconnected players ──────────────────────
   // Playing phase: after 3 s, play a random legal card.
@@ -405,7 +428,10 @@ export default function Game() {
     if (!turnPlayer) return undefined
     const isGone = currentTurnPlayerStatus === 'disconnected' || isPlayerOffline(turnPlayer)
     if (!isGone) return undefined
-    const legalOptions = getLegalCalls(cardsPerRound, playersRef.current, currentTurnPlayerId)
+    // Only use players in this round's turnOrder — excludes stale call data
+    // from players who were dropped from the round but still have a call doc.
+    const inRoundPlayers = playersRef.current.filter((p) => turnOrderRef.current.includes(p.id))
+    const legalOptions = getLegalCalls(cardsPerRound, inRoundPlayers, currentTurnPlayerId)
     if (legalOptions.length === 0) return undefined
     const timer = setTimeout(() => {
       const call = legalOptions[Math.floor(Math.random() * legalOptions.length)]
@@ -481,7 +507,7 @@ export default function Game() {
       const card = playableCards[Math.floor(Math.random() * playableCards.length)]
       handlePlayCard(card)
     } else if (callingPhase && me?.call == null) {
-      const legal = getLegalCalls(cardsPerRound, players, currentUserId)
+      const legal = getLegalCalls(cardsPerRound, turnOrderPlayers, currentUserId)
       if (legal.length > 0) {
         handleSubmitCall(legal[Math.floor(Math.random() * legal.length)])
       }
@@ -521,7 +547,7 @@ export default function Game() {
   const callPicker = showCallPicker ? (
     <CallPicker
       cardsPerRound={cardsPerRound}
-      players={players}
+      players={turnOrderPlayers}
       userId={currentUserId}
       onSubmit={handleSubmitCall}
       busy={busy}

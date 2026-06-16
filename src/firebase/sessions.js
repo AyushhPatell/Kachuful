@@ -772,13 +772,23 @@ export async function advanceToNextRound(code) {
   const now = Date.now()
   const playersForRound = []
   for (const p of allPlayers) {
+    // Kicked players are permanently removed — don't touch their doc or include them
+    if (p.kicked) continue
+
     const isStale = p.lastSeenAt && (now - p.lastSeenAt) > OFFLINE_THRESHOLD_MS
     const neededAutoHelp = p.lastAutoActedRound === roundNumber
     const missedRoundsStreak = neededAutoHelp ? (p.missedRoundsStreak ?? 0) + 1 : 0
     const exceededMissedStreak = missedRoundsStreak >= MISSED_ROUNDS_DISCONNECT_THRESHOLD
 
     if (isStale || p.status === 'disconnected' || exceededMissedStreak) {
-      await updateDoc(playerRef(code, p.id), { status: 'disconnected', missedRoundsStreak })
+      // Clear call/tricksWon so stale data from this round never bleeds into
+      // the next round's calling calculations.
+      await updateDoc(playerRef(code, p.id), {
+        status: 'disconnected',
+        missedRoundsStreak,
+        call: null,
+        tricksWon: 0,
+      })
     } else {
       await updateDoc(playerRef(code, p.id), { missedRoundsStreak })
       playersForRound.push(p)
@@ -929,8 +939,11 @@ export async function reconnectPlayer(code, userId) {
   try {
     const snap = await getDoc(playerRef(code, userId))
     if (!snap.exists()) return
+    const data = snap.data()
+    // Kicked players must not be able to auto-reconnect by reopening the page.
+    if (data.kicked) return
     await updateDoc(playerRef(code, userId), {
-      status: snap.data().status === 'disconnected' ? 'active' : snap.data().status,
+      status: data.status === 'disconnected' ? 'active' : data.status,
       lastSeenAt: Date.now(),
       // Give them a clean slate so one missed round right after reconnecting
       // doesn't immediately count toward the disconnect streak again.
@@ -954,9 +967,9 @@ export async function recordAutoAction(code, userId, roundNumber) {
 }
 
 /**
- * Host removes an offline player from the rotation. This freezes their
- * status as 'disconnected' rather than deleting their doc, so their score
- * still appears in the final leaderboard instead of vanishing.
+ * Host permanently removes an offline player from the rotation. Sets kicked:true
+ * so they disappear from the kick UI immediately and can never auto-reconnect.
+ * Their score doc is preserved for the final leaderboard.
  */
 export async function kickPlayer(code, targetUserId) {
   if (!isFirebaseConfigured) throw new Error('Firebase not configured')
@@ -964,7 +977,12 @@ export async function kickPlayer(code, targetUserId) {
   const sessionSnap = await getDoc(sessionsRef(code))
   if (!sessionSnap.exists()) throw new Error('Session not found')
   if (sessionSnap.data().ownerId !== userId) throw new Error('Only the host can kick players')
-  await updateDoc(playerRef(code, targetUserId), { status: 'disconnected' })
+  await updateDoc(playerRef(code, targetUserId), {
+    status: 'disconnected',
+    kicked: true,
+    call: null,
+    tricksWon: 0,
+  })
 }
 
 /**

@@ -28,9 +28,11 @@ export default function RoundScoreOverlay({
 
   const endVoteActive = round?.endVoteActive === true
 
-  // Offline players (for host kick UI)
+  // Offline players available to kick — exclude already-kicked players so the
+  // kick button disappears immediately after the host uses it.
   const offlinePlayers = players?.filter(p =>
     p.id !== currentUserId &&
+    !p.kicked &&
     (p.status === 'disconnected' || isPlayerOffline(p))
   ) ?? []
 
