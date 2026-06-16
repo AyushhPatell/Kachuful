@@ -24,6 +24,7 @@ import {
   reconnectPlayer,
   recordAutoAction,
   rejectJoinRequest,
+  setPlayerForeground,
   submitCall,
   subscribeToMyJoinRequest,
   subscribeToPlayers,
@@ -293,15 +294,27 @@ export default function Game() {
     return () => clearInterval(interval)
   }, [code, currentUserId, me?.status])
 
+  // Track whether THIS game's screen is actually visible, so the push-
+  // notification Cloud Function knows not to alert someone who'd already
+  // see their turn happen live in the UI.
+  useEffect(() => {
+    if (!currentUserId || !code || !me) return undefined
+    setPlayerForeground(code, currentUserId, document.visibilityState === 'visible').catch(() => {})
+    return () => { setPlayerForeground(code, currentUserId, false).catch(() => {}) }
+  }, [code, currentUserId, me?.id])
+
   useEffect(() => {
     if (!currentUserId || !code || !me) return undefined
     function handleVisibilityChange() {
-      if (document.visibilityState === 'visible') {
+      const visible = document.visibilityState === 'visible'
+      setPlayerForeground(code, currentUserId, visible).catch(() => {})
+      if (visible) {
         pingPresence(code, currentUserId).catch(() => {})
       }
     }
     function handleBeforeUnload() {
       markPlayerDisconnected(code, currentUserId).catch(() => {})
+      setPlayerForeground(code, currentUserId, false).catch(() => {})
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('beforeunload', handleBeforeUnload)

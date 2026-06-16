@@ -14,6 +14,45 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
+// Web push doesn't auto-display itself just because a custom SW exists —
+// we have to parse the payload and call showNotification ourselves.
+self.addEventListener('push', (event) => {
+  if (!event.data) return
+  let payload
+  try {
+    payload = event.data.json()
+  } catch {
+    return
+  }
+
+  const notification = payload.notification ?? payload.data ?? {}
+  const title = notification.title ?? 'Kachuful'
+  const body = notification.body ?? ''
+  const url = payload.fcmOptions?.link ?? payload.data?.url ?? notification.url ?? '/'
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: notification.icon ?? '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url },
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url ?? '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientsList) => {
+      for (const client of clientsList) {
+        if (client.url.includes(url) && 'focus' in client) return client.focus()
+      }
+      return self.clients.openWindow?.(url)
+    })
+  )
+})
+
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { isMuted, setMuted } from '../../lib/sounds.js'
+import { enablePushNotifications, getPushPermission } from '../../lib/push.js'
 
 // Sub-views inside the menu panel
 const VIEW_MAIN        = 'main'
@@ -14,6 +15,9 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
   const [muted, setMutedState] = useState(() => isMuted())
   const [copied, setCopied] = useState(false)
   const [endingBusy, setEndingBusy] = useState(false)
+  const [pushPermission, setPushPermission] = useState(() => getPushPermission())
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushError, setPushError] = useState('')
 
   function handleOpen() {
     setView(VIEW_MAIN)
@@ -36,6 +40,19 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
     navigator.clipboard?.writeText(sessionCode)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleEnablePush() {
+    setPushBusy(true)
+    setPushError('')
+    try {
+      await enablePushNotifications()
+      setPushPermission(getPushPermission())
+    } catch (err) {
+      setPushError(err.message)
+    } finally {
+      setPushBusy(false)
+    }
   }
 
   async function handleConfirmEndSession() {
@@ -106,6 +123,32 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
                       <span className="text-base">{muted ? '🔇' : '🔊'}</span>
                       <span>{muted ? 'Unmute sounds' : 'Mute sounds'}</span>
                     </button>
+
+                    <div className="mx-3 my-1 h-px bg-white/10" />
+
+                    {pushPermission === 'granted' ? (
+                      <div className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-500">
+                        <span className="text-base">🔔</span>
+                        <span>Turn alerts on</span>
+                      </div>
+                    ) : pushPermission === 'denied' ? (
+                      <div className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-500">
+                        <span className="text-base">🔕</span>
+                        <span>Notifications blocked in browser settings</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleEnablePush}
+                        disabled={pushBusy}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-200 transition-colors hover:bg-white/8 disabled:opacity-50"
+                      >
+                        <span className="text-base">🔔</span>
+                        <span>{pushBusy ? 'Enabling…' : 'Enable turn alerts'}</span>
+                      </button>
+                    )}
+                    {pushError && (
+                      <p className="px-4 pb-1 text-[10px] text-red-400">{pushError}</p>
+                    )}
 
                     <div className="mx-3 my-1 h-px bg-white/10" />
 

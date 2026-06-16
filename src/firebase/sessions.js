@@ -899,6 +899,20 @@ export async function pingPresence(code, userId) {
   }
 }
 
+/**
+ * Whether this player currently has THIS specific game's tab/screen visible.
+ * Used to suppress a push notification when they'd already see the turn
+ * change happen live in the UI.
+ */
+export async function setPlayerForeground(code, userId, isForeground) {
+  if (!isFirebaseConfigured || !userId) return
+  try {
+    await updateDoc(playerRef(code, userId), { isForeground })
+  } catch {
+    // Best effort — never block on this
+  }
+}
+
 /** Mark a player as disconnected (called on beforeunload / visibility change). */
 export async function markPlayerDisconnected(code, userId) {
   if (!isFirebaseConfigured || !userId) return
