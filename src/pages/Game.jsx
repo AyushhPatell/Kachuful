@@ -34,6 +34,7 @@ import {
 import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
 import { getCardsPerRound, getPlayableCards, isTrumpCard, resolveSarForRound } from '../lib/gameLogic.js'
 import { getLegalCalls } from '../lib/callValidation.js'
+import { hapticTrickWon, hapticYourTurn } from '../lib/haptics.js'
 import { getSeatPositions, orderPlayersForTable } from '../lib/seatLayout.js'
 import { getEndVoteTally } from '../lib/voting.js'
 import { ROUND_STATUS } from '../constants/game.js'
@@ -347,6 +348,7 @@ export default function Game() {
   useEffect(() => {
     if (isMyTurn && !prevIsMyTurnRef.current && tablePhase === 'playing') {
       playSound('yourTurn')
+      hapticYourTurn()
     }
     prevIsMyTurnRef.current = isMyTurn
   }, [isMyTurn, tablePhase])
@@ -356,8 +358,9 @@ export default function Game() {
     if (trickReveal?.at && trickReveal.at !== prevTrickRevealRef.current) {
       prevTrickRevealRef.current = trickReveal.at
       playSound('trickWin')
+      if (trickReveal.winnerId === currentUserId) hapticTrickWon()
     }
-  }, [trickReveal?.at])
+  }, [trickReveal?.at, trickReveal?.winnerId, currentUserId])
 
   useEffect(() => {
     if (flyPlay?.card && isTrumpCard(flyPlay.card, sar)) {
