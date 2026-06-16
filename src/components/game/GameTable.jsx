@@ -65,6 +65,7 @@ export default function GameTable({
   dealerPlayerId = null,
   onTimerExpire,
   currentTurnStartedAt = null,
+  onInitiateEndVote,
   className = '',
 }) {
   const seated = orderPlayersForTable(players, turnOrder, currentUserId)
@@ -144,7 +145,15 @@ export default function GameTable({
           </div>
           <div className="flex items-center gap-2">
             {sarInfo ? <SarBadge sar={sar} compact /> : null}
-            {sessionCode ? <GameMenu sessionCode={sessionCode} onLeave={onLeave} /> : null}
+            {sessionCode ? (
+              <GameMenu
+                sessionCode={sessionCode}
+                onLeave={onLeave}
+                isOwner={isOwner}
+                voteActive={round?.endVoteActive === true}
+                onInitiateEndVote={onInitiateEndVote}
+              />
+            ) : null}
           </div>
         </div>
 
