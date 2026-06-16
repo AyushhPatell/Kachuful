@@ -18,8 +18,8 @@ export const RANK_VALUES = {
 
 export const MIN_PLAYERS = 2
 export const MAX_PLAYERS = 7
-export const SESSION_HISTORY_LIMIT = 5
-export const DISCONNECT_WAIT_SECONDS = 60
+export const SESSION_HISTORY_LIMIT = 4
+export const DISCONNECT_WAIT_SECONDS = 45
 
 export const SESSION_STATUS = {
   LOBBY: 'lobby',

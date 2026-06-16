@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -31,9 +32,17 @@ import {
   resolveSarForRound,
 } from '../lib/gameLogic.js'
 import { generateSessionCode } from '../lib/sessionCode.js'
-import { MAX_PLAYERS, MIN_PLAYERS, ROUND_STATUS, SESSION_STATUS } from '../constants/game.js'
+import {
+  DISCONNECT_WAIT_SECONDS,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
+  ROUND_STATUS,
+  SESSION_HISTORY_LIMIT,
+  SESSION_STATUS,
+} from '../constants/game.js'
 
-const OFFLINE_THRESHOLD_MS = 90_000 // 90 seconds without a heartbeat = disconnected
+const OFFLINE_THRESHOLD_MS = DISCONNECT_WAIT_SECONDS * 1000
+const MISSED_ROUNDS_DISCONNECT_THRESHOLD = 2 // consecutive rounds needing auto-play/auto-call
 
 function sessionsRef(code) {
   return doc(db, 'sessions', code)
@@ -173,6 +182,18 @@ export async function createSession(displayName) {
   })
 
   return code
+}
+
+/**
+ * Start a rematch from a finished session: creates a fresh lobby and points
+ * the old (ended) session at it so everyone still looking at that final
+ * leaderboard sees a "Join Rematch" prompt via their existing live
+ * subscription — no separate invite mechanism needed.
+ */
+export async function initiateRematch(oldCode, displayName) {
+  const newCode = await createSession(displayName)
+  await updateDoc(sessionsRef(oldCode), { rematchCode: newCode }).catch(() => {})
+  return newCode
 }
 
 function mapJoinRequestDoc(userId, data) {
@@ -398,8 +419,81 @@ async function saveSessionSummary(code, sessionData, players) {
         setDoc(sessionHistoryRef(p.id, code), { ...summary, myId: p.id }, { merge: true })
       )
     )
+
+    // Best-effort background sweep — never block the leaderboard navigation
+    // that's waiting on this function to finish.
+    pruneInvisibleSessions(activePlayers.map(p => p.id)).catch(() => {})
   } catch (err) {
     console.warn('Failed to save session summary:', err)
+  }
+}
+
+/**
+ * A finished session's history entry is only useful while it's still
+ * visible on someone's "last N games" list. Each time a player's history
+ * grows past that limit, check whether the entries that just fell off are
+ * ALSO invisible to every other participant — if so, nobody can ever see
+ * that game again, so delete its history copies and its raw session data
+ * (sessions/{code} + players/rounds subcollections) to stop them piling up
+ * in Firestore forever.
+ */
+async function pruneInvisibleSessions(playerIds) {
+  for (const playerId of playerIds) {
+    const overflowing = await getDocs(
+      query(collection(db, 'userHistory', playerId, 'sessions'), orderBy('endedAt', 'desc')),
+    )
+    const overflow = overflowing.docs.slice(SESSION_HISTORY_LIMIT)
+
+    for (const docSnap of overflow) {
+      const data = docSnap.data()
+      const sessionCode = data.sessionCode ?? docSnap.id
+      const participantIds = (data.players ?? []).map((p) => p.id)
+      if (!participantIds.length) continue
+
+      const visibleToSomeone = await isSessionVisibleToAnyone(sessionCode, participantIds)
+      if (!visibleToSomeone) {
+        await deleteSessionEverywhere(sessionCode, participantIds)
+      }
+    }
+  }
+}
+
+async function isSessionVisibleToAnyone(sessionCode, participantIds) {
+  for (const id of participantIds) {
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, 'userHistory', id, 'sessions'),
+          orderBy('endedAt', 'desc'),
+          limit(SESSION_HISTORY_LIMIT),
+        ),
+      )
+      if (snap.docs.some((d) => d.id === sessionCode)) return true
+    } catch {
+      // If we can't verify, assume it's still visible — never delete on doubt.
+      return true
+    }
+  }
+  return false
+}
+
+async function deleteSessionEverywhere(sessionCode, participantIds) {
+  await Promise.all(
+    participantIds.map((id) => deleteDoc(sessionHistoryRef(id, sessionCode)).catch(() => {})),
+  )
+  try {
+    const [playerDocs, roundDocs] = await Promise.all([
+      getDocs(playersCollection(sessionCode)),
+      getDocs(collection(db, 'sessions', sessionCode, 'rounds')),
+    ])
+    await Promise.all([
+      ...playerDocs.docs.map((d) => deleteDoc(d.ref).catch(() => {})),
+      ...roundDocs.docs.map((d) => deleteDoc(d.ref).catch(() => {})),
+    ])
+    await deleteDoc(sessionsRef(sessionCode))
+  } catch {
+    // Best effort — a leftover raw session with no history pointer is
+    // harmless clutter, not a correctness problem.
   }
 }
 
@@ -409,6 +503,7 @@ export async function fetchSessionHistory(userId) {
     const q = query(
       collection(db, 'userHistory', userId, 'sessions'),
       orderBy('endedAt', 'desc'),
+      limit(SESSION_HISTORY_LIMIT),
     )
     const snap = await getDocs(q)
     return snap.docs.map(d => d.data())
@@ -669,15 +764,23 @@ export async function advanceToNextRound(code) {
     throw new Error('This round is not finished yet')
   }
 
-  // Mark players who haven't sent a heartbeat in 90s as disconnected, exclude from next round
+  // Mark players disconnected if their heartbeat has gone stale, OR if they
+  // needed host auto-play/auto-call for MISSED_ROUNDS_DISCONNECT_THRESHOLD
+  // consecutive rounds (catches "technically online but not really here"
+  // without penalizing someone who just switched tabs for a few seconds).
   const allPlayers = await getActivePlayers(code)
   const now = Date.now()
   const playersForRound = []
   for (const p of allPlayers) {
     const isStale = p.lastSeenAt && (now - p.lastSeenAt) > OFFLINE_THRESHOLD_MS
-    if (isStale || p.status === 'disconnected') {
-      await updateDoc(playerRef(code, p.id), { status: 'disconnected' })
+    const neededAutoHelp = p.lastAutoActedRound === roundNumber
+    const missedRoundsStreak = neededAutoHelp ? (p.missedRoundsStreak ?? 0) + 1 : 0
+    const exceededMissedStreak = missedRoundsStreak >= MISSED_ROUNDS_DISCONNECT_THRESHOLD
+
+    if (isStale || p.status === 'disconnected' || exceededMissedStreak) {
+      await updateDoc(playerRef(code, p.id), { status: 'disconnected', missedRoundsStreak })
     } else {
+      await updateDoc(playerRef(code, p.id), { missedRoundsStreak })
       playersForRound.push(p)
     }
   }
@@ -796,6 +899,20 @@ export async function pingPresence(code, userId) {
   }
 }
 
+/**
+ * Whether this player currently has THIS specific game's tab/screen visible.
+ * Used to suppress a push notification when they'd already see the turn
+ * change happen live in the UI.
+ */
+export async function setPlayerForeground(code, userId, isForeground) {
+  if (!isFirebaseConfigured || !userId) return
+  try {
+    await updateDoc(playerRef(code, userId), { isForeground })
+  } catch {
+    // Best effort — never block on this
+  }
+}
+
 /** Mark a player as disconnected (called on beforeunload / visibility change). */
 export async function markPlayerDisconnected(code, userId) {
   if (!isFirebaseConfigured || !userId) return
@@ -815,9 +932,24 @@ export async function reconnectPlayer(code, userId) {
     await updateDoc(playerRef(code, userId), {
       status: snap.data().status === 'disconnected' ? 'active' : snap.data().status,
       lastSeenAt: Date.now(),
+      // Give them a clean slate so one missed round right after reconnecting
+      // doesn't immediately count toward the disconnect streak again.
+      missedRoundsStreak: 0,
+      lastAutoActedRound: null,
     })
   } catch {
     // Ignore
+  }
+}
+
+/** Host's auto-play/auto-call fired for this player this round — track it
+ * toward the "unresponsive for N consecutive rounds" disconnect rule. */
+export async function recordAutoAction(code, userId, roundNumber) {
+  if (!isFirebaseConfigured || !userId) return
+  try {
+    await updateDoc(playerRef(code, userId), { lastAutoActedRound: roundNumber })
+  } catch {
+    // Best effort — never block the auto-play/auto-call itself
   }
 }
 

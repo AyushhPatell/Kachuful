@@ -17,6 +17,19 @@ import { auth, db, isFirebaseConfigured } from './config.js'
 
 const googleProvider = new GoogleAuthProvider()
 
+// signInWithPopup is unreliable on mobile and especially inside an
+// iOS "Add to Home Screen" standalone app — it can hang or fail silently
+// instead of throwing a catchable error, which is what left users stuck.
+// Go straight to redirect there instead of waiting for popup to fail.
+function shouldUseRedirect() {
+  if (typeof window === 'undefined') return false
+  const isStandalone =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    window.navigator?.standalone === true
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(window.navigator?.userAgent ?? '')
+  return isStandalone || isMobile
+}
+
 function resolveDisplayName(user) {
   return user.displayName || user.email?.split('@')[0] || 'Player'
 }
@@ -49,6 +62,11 @@ async function syncUserProfile(user) {
 export async function signInWithGoogle() {
   if (!isFirebaseConfigured) {
     throw new Error('Firebase is not configured. Add your keys to .env and restart the dev server.')
+  }
+
+  if (shouldUseRedirect()) {
+    await signInWithRedirect(auth, googleProvider)
+    return null
   }
 
   try {

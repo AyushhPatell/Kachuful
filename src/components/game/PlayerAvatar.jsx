@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 function initials(name) {
   if (!name) return '?'
   const parts = name.trim().split(/\s+/)
@@ -24,6 +26,7 @@ function colorForName(name) {
 }
 
 export default function PlayerAvatar({ name, photoURL, size = 'md', glow = false, className = '' }) {
+  const [imgFailed, setImgFailed] = useState(false)
   const sizes = {
     sm: { box: 'h-8 w-8', text: 'text-[10px]' },
     md: { box: 'h-10 w-10', text: 'text-xs' },
@@ -35,11 +38,12 @@ export default function PlayerAvatar({ name, photoURL, size = 'md', glow = false
     ? { boxShadow: '0 0 0 2.5px rgba(245,158,11,0.95), 0 0 14px rgba(245,158,11,0.5)' }
     : { boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }
 
-  if (photoURL) {
+  if (photoURL && !imgFailed) {
     return (
       <img
         src={photoURL}
         alt=""
+        onError={() => setImgFailed(true)}
         className={`${s.box} shrink-0 rounded-full object-cover transition-shadow duration-300 ${className}`}
         style={glowStyle}
       />

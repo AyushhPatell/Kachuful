@@ -21,11 +21,12 @@ service cloud.firestore {
       }
     }
 
-    // Session history — each player can only read their own history.
-    // Any authenticated player can write (the game engine writes all players' summaries at round end).
+    // Session history. Any authenticated player can read/write any entry —
+    // the game engine writes every participant's summary at session end, and
+    // the storage-cleanup sweep needs to check whether a session has scrolled
+    // out of every participant's recent-history view before deleting it.
     match /userHistory/{userId}/sessions/{sessionCode} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
   }
 }

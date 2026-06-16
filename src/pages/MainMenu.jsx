@@ -19,7 +19,7 @@ const SUITS = [
 
 export default function MainMenu() {
   const navigate = useNavigate()
-  const { user, displayName, isSignedIn, authReady, isFirebaseConfigured, setLoading, setError } = useAuth()
+  const { user, displayName, isSignedIn, authReady, authTimedOut, isFirebaseConfigured, setLoading, setError } = useAuth()
   const [joinCode, setJoinCode] = useState('')
   const [localError, setLocalError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -68,8 +68,22 @@ export default function MainMenu() {
 
   if (!authReady) {
     return (
-      <div className="flex min-h-svh items-center justify-center">
+      <div className="flex min-h-svh flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-sm text-muted">Loading…</p>
+        {authTimedOut && (
+          <>
+            <p className="max-w-xs text-xs text-zinc-500">
+              This is taking longer than usual. If it doesn't finish in a few seconds, reload.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-xl px-4 py-2 text-xs font-semibold text-zinc-200"
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.14)' }}
+            >
+              Reload
+            </button>
+          </>
+        )}
       </div>
     )
   }

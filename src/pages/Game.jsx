@@ -22,7 +22,9 @@ import {
   pingPresence,
   playCard,
   reconnectPlayer,
+  recordAutoAction,
   rejectJoinRequest,
+  setPlayerForeground,
   submitCall,
   subscribeToMyJoinRequest,
   subscribeToPlayers,
@@ -32,6 +34,7 @@ import {
 import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
 import { getCardsPerRound, getPlayableCards, isTrumpCard, resolveSarForRound } from '../lib/gameLogic.js'
 import { getLegalCalls } from '../lib/callValidation.js'
+import { hapticTrickWon, hapticYourTurn } from '../lib/haptics.js'
 import { getSeatPositions, orderPlayersForTable } from '../lib/seatLayout.js'
 import { getEndVoteTally } from '../lib/voting.js'
 import { ROUND_STATUS } from '../constants/game.js'
@@ -77,8 +80,11 @@ export default function Game() {
   const pendingJoin = hasPendingJoinRequest(session, currentUserId) || pendingFromSubcollection
   const roundNumber = session?.currentRound ?? 0
   const cardsPerRound = session ? getCardsPerRound(roundNumber, session.maxRound) : 0
-  // Adaptive deal speed: 650ms for 1 card, ~290ms for 8 cards (52ms per extra card)
-  const dealCardMs = Math.max(290, 650 - (cardsPerRound - 1) * 52)
+  // Adaptive deal speed: front-loads more of the speed-up in the early
+  // rounds (650ms at 1 card → ~368ms by 4 cards) instead of a straight
+  // linear ramp that still felt slow by round 4, then flattens out toward
+  // the same ~290ms floor by round 8 as before.
+  const dealCardMs = Math.max(290, Math.round(290 + 360 * Math.pow(0.6, cardsPerRound - 1)))
   const isMyTurn = session?.currentTurn === currentUserId
   const isSpectator = me?.status === 'spectator' || (pendingJoin && !me)
   const currentTurnPlayer = players.find((p) => p.id === session?.currentTurn)
@@ -292,15 +298,27 @@ export default function Game() {
     return () => clearInterval(interval)
   }, [code, currentUserId, me?.status])
 
+  // Track whether THIS game's screen is actually visible, so the push-
+  // notification Cloud Function knows not to alert someone who'd already
+  // see their turn happen live in the UI.
+  useEffect(() => {
+    if (!currentUserId || !code || !me) return undefined
+    setPlayerForeground(code, currentUserId, document.visibilityState === 'visible').catch(() => {})
+    return () => { setPlayerForeground(code, currentUserId, false).catch(() => {}) }
+  }, [code, currentUserId, me?.id])
+
   useEffect(() => {
     if (!currentUserId || !code || !me) return undefined
     function handleVisibilityChange() {
-      if (document.visibilityState === 'visible') {
+      const visible = document.visibilityState === 'visible'
+      setPlayerForeground(code, currentUserId, visible).catch(() => {})
+      if (visible) {
         pingPresence(code, currentUserId).catch(() => {})
       }
     }
     function handleBeforeUnload() {
       markPlayerDisconnected(code, currentUserId).catch(() => {})
+      setPlayerForeground(code, currentUserId, false).catch(() => {})
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -333,6 +351,7 @@ export default function Game() {
   useEffect(() => {
     if (isMyTurn && !prevIsMyTurnRef.current && tablePhase === 'playing') {
       playSound('yourTurn')
+      hapticYourTurn()
     }
     prevIsMyTurnRef.current = isMyTurn
   }, [isMyTurn, tablePhase])
@@ -342,8 +361,9 @@ export default function Game() {
     if (trickReveal?.at && trickReveal.at !== prevTrickRevealRef.current) {
       prevTrickRevealRef.current = trickReveal.at
       playSound('trickWin')
+      if (trickReveal.winnerId === currentUserId) hapticTrickWon()
     }
-  }, [trickReveal?.at])
+  }, [trickReveal?.at, trickReveal?.winnerId, currentUserId])
 
   useEffect(() => {
     if (flyPlay?.card && isTrumpCard(flyPlay.card, sar)) {
@@ -372,9 +392,10 @@ export default function Game() {
     const timer = setTimeout(() => {
       const card = legalCards[Math.floor(Math.random() * legalCards.length)]
       playCard(code, currentTurnPlayerId, card).catch(() => {})
+      recordAutoAction(code, currentTurnPlayerId, roundNumber).catch(() => {})
     }, 3000)
     return () => clearTimeout(timer)
-  }, [isOwner, playingPhase, currentTurnPlayerId, currentTurnPlayerStatus, code, currentUserId])
+  }, [isOwner, playingPhase, currentTurnPlayerId, currentTurnPlayerStatus, code, currentUserId, roundNumber])
 
   // Calling phase: after 3 s, submit a random legal call.
   useEffect(() => {
@@ -389,6 +410,7 @@ export default function Game() {
     const timer = setTimeout(() => {
       const call = legalOptions[Math.floor(Math.random() * legalOptions.length)]
       submitCall(code, roundNumber, currentTurnPlayerId, call).catch(() => {})
+      recordAutoAction(code, currentTurnPlayerId, roundNumber).catch(() => {})
     }, 3000)
     return () => clearTimeout(timer)
   }, [isOwner, callingPhase, currentTurnPlayerId, currentTurnPlayerStatus, code, roundNumber, cardsPerRound, currentUserId])

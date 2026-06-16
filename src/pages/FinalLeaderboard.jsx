@@ -1,24 +1,53 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import confetti from 'canvas-confetti'
 import PlayerAvatar from '../components/game/PlayerAvatar.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
-import { subscribeToPlayers, subscribeToSession } from '../firebase/sessions.js'
+import {
+  initiateRematch,
+  requestJoinSession,
+  subscribeToPlayers,
+  subscribeToSession,
+} from '../firebase/sessions.js'
 import { rankPlayers } from '../lib/gameLogic.js'
 import { playSound } from '../lib/sounds.js'
 
 export default function FinalLeaderboard() {
   const { code } = useParams()
-  const { userId } = useAuth()
+  const navigate = useNavigate()
+  const { userId, displayName } = useAuth()
   const [players, setPlayers] = useState([])
   const [session, setSession] = useState(null)
+  const [rematchBusy, setRematchBusy] = useState(false)
 
   useEffect(() => {
     const unsubSession = subscribeToSession(code, setSession)
     const unsubPlayers = subscribeToPlayers(code, setPlayers)
     return () => { unsubSession(); unsubPlayers() }
   }, [code])
+
+  async function handlePlayAgain() {
+    setRematchBusy(true)
+    try {
+      const newCode = await initiateRematch(code, displayName)
+      navigate(`/lobby/${newCode}`)
+    } catch (err) {
+      console.error(err)
+      setRematchBusy(false)
+    }
+  }
+
+  async function handleJoinRematch() {
+    setRematchBusy(true)
+    try {
+      await requestJoinSession(session.rematchCode, displayName)
+      navigate(`/lobby/${session.rematchCode}`)
+    } catch (err) {
+      console.error(err)
+      setRematchBusy(false)
+    }
+  }
 
   const ranked = rankPlayers(players.filter(p => p.status !== 'spectator'))
   const winner = ranked[0]
@@ -170,20 +199,43 @@ export default function FinalLeaderboard() {
         Session: <span className="font-mono text-zinc-500">{code}</span>
       </p>
 
+      {session?.rematchCode && (
+        <motion.p
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center text-xs text-emerald-400"
+        >
+          A rematch lobby is ready — jump back in!
+        </motion.p>
+      )}
+
       {/* CTAs */}
       <div className="flex w-full gap-3">
         <Link to="/" className="flex-1">
           <motion.button
             whileTap={{ scale: 0.97 }}
-            className="w-full rounded-xl py-3.5 text-sm font-bold text-white"
-            style={{
-              background: 'linear-gradient(135deg, #c9963a, #a67828)',
-              boxShadow: '0 4px 20px rgba(201,150,58,0.3)',
-            }}
+            className="w-full rounded-xl py-3.5 text-sm font-bold text-zinc-200"
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}
           >
             Back to Home
           </motion.button>
         </Link>
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          disabled={rematchBusy}
+          onClick={session?.rematchCode ? handleJoinRematch : handlePlayAgain}
+          className="flex-1 rounded-xl py-3.5 text-sm font-bold text-white disabled:opacity-50"
+          style={{
+            background: 'linear-gradient(135deg, #c9963a, #a67828)',
+            boxShadow: '0 4px 20px rgba(201,150,58,0.3)',
+          }}
+        >
+          {rematchBusy
+            ? 'One sec…'
+            : session?.rematchCode
+            ? 'Join Rematch →'
+            : 'Play Again →'}
+        </motion.button>
       </div>
     </div>
   )
