@@ -9,6 +9,20 @@ export function getMaxRound(playerCount) {
   return playerCount === 7 ? 7 : 8
 }
 
+// Display order alternates black/red so the two black suits (spades, clubs)
+// are never placed next to each other — easier to tell them apart at a glance.
+const SUIT_DISPLAY_ORDER = { spades: 0, hearts: 1, clubs: 2, diamonds: 3 }
+
+/** Sort a hand for display: grouped by suit, ascending rank within each suit.
+ * Pure — returns a new array, does not mutate the input. */
+export function sortHandForDisplay(cards) {
+  return [...(cards ?? [])].sort((a, b) => {
+    const suitDiff = (SUIT_DISPLAY_ORDER[a.suit] ?? 9) - (SUIT_DISPLAY_ORDER[b.suit] ?? 9)
+    if (suitDiff !== 0) return suitDiff
+    return (RANK_VALUES[a.rank] ?? 0) - (RANK_VALUES[b.rank] ?? 0)
+  })
+}
+
 /** Cards dealt per player for a given session round (1-indexed).
  * Cycle: 1,2,...,8,8,7,...,2,1,1,2,... — peak and trough each appear twice. */
 export function getCardsPerRound(sessionRoundNumber, maxRound) {
