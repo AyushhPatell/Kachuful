@@ -468,6 +468,13 @@ export default function Game() {
     claimHostRole(code).catch(() => {})
   }, [session?.ownerId, code, currentUserId, players])
 
+  // Auto-clear transient errors after 4.5 s so they don't linger forever
+  useEffect(() => {
+    if (!error) return
+    const t = setTimeout(() => setError(''), 4500)
+    return () => clearTimeout(t)
+  }, [error])
+
   // ── handlers ────────────────────────────────────────────────────────────────
   async function handleAcceptJoin(request) {
     setError('')
@@ -660,9 +667,18 @@ export default function Game() {
       )}
 
       {error ? (
-        <p className="pointer-events-none absolute bottom-28 inset-x-4 z-40 rounded-lg bg-red-950/90 px-3 py-2 text-center text-xs text-red-100">
-          {error}
-        </p>
+        <div
+          className="pointer-events-none absolute bottom-28 inset-x-4 z-40 flex items-start gap-2.5 rounded-xl px-3.5 py-2.5"
+          style={{
+            background: 'rgba(120,20,20,0.95)',
+            border: '1px solid rgba(239,68,68,0.22)',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          }}
+        >
+          <span className="mt-0.5 shrink-0 text-sm leading-none">⚠️</span>
+          <p className="text-[11px] leading-snug text-red-100">{error}</p>
+        </div>
       ) : null}
 
       {listenError ? (

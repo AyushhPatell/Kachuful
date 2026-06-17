@@ -9,16 +9,17 @@ export function getMaxRound(playerCount) {
   return playerCount === 7 ? 7 : 8
 }
 
-/** Cards dealt per player for a given session round (1-indexed). */
+/** Cards dealt per player for a given session round (1-indexed).
+ * Cycle: 1,2,...,8,8,7,...,2,1,1,2,... — peak and trough each appear twice. */
 export function getCardsPerRound(sessionRoundNumber, maxRound) {
-  const cycleLength = 2 * maxRound - 1
+  const cycleLength = 2 * maxRound
   const posInCycle = ((sessionRoundNumber - 1) % cycleLength) + 1
   if (posInCycle <= maxRound) return posInCycle
-  return 2 * maxRound - posInCycle
+  return 2 * maxRound + 1 - posInCycle
 }
 
 export function getRoundDirection(sessionRoundNumber, maxRound) {
-  const cycleLength = 2 * maxRound - 1
+  const cycleLength = 2 * maxRound
   const posInCycle = ((sessionRoundNumber - 1) % cycleLength) + 1
   return posInCycle <= maxRound ? 'up' : 'down'
 }
