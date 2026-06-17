@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { SAR_INFO } from '../../constants/game.js'
-import { calculateRoundPoints, isTrumpCard } from '../../lib/gameLogic.js'
+import { calculateRoundPoints, isTrumpCard, sortHandForDisplay } from '../../lib/gameLogic.js'
 import {
   getSeatHandCount,
   getSeatPositions,
@@ -96,6 +96,8 @@ export default function GameTable({
   const playableIds = new Set(playableCards.map(c => c.id))
   const hiddenCardId = flyPlay?.fromLocal ? flyPlay.card?.id : null
   const localPlayer = seated[0]
+  // Show the hand grouped by suit and sorted low→high, like arranging real cards.
+  const sortedHand = useMemo(() => sortHandForDisplay(me?.hand ?? []), [me?.hand])
   const localIsTurn = currentTurn === currentUserId
   const timerInitialSeconds = currentTurnStartedAt
     ? Math.max(0, 40 - Math.floor((Date.now() - currentTurnStartedAt) / 1000))
@@ -335,7 +337,7 @@ export default function GameTable({
             }`}
           >
             <HandFan
-              cards={me?.hand ?? []}
+              cards={sortedHand}
               visibleCount={visibleHandCount}
               faceDown={isDealing && !dealComplete}
               faceUpAfterDeal={faceUpHand}

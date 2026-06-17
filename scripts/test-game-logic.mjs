@@ -9,6 +9,7 @@ import {
   getSarForRound,
   resolveSarForRound,
   resolveVote,
+  sortHandForDisplay,
 } from '../src/lib/gameLogic.js'
 
 assert.equal(getMaxRound(7), 7)
@@ -84,6 +85,21 @@ const freshRound = [
 ]
 assert.equal(isCallLegal(0, 1, freshRound, 'a'), true)
 assert.equal(isCallLegal(1, 1, freshRound, 'a'), true)
+
+// Hand sort: grouped by suit (spades, hearts, clubs, diamonds), ascending rank
+const messyHand = [
+  { suit: 'clubs', rank: 'K', id: 'K-clubs' },
+  { suit: 'spades', rank: '3', id: '3-spades' },
+  { suit: 'hearts', rank: 'A', id: 'A-hearts' },
+  { suit: 'spades', rank: '10', id: '10-spades' },
+  { suit: 'diamonds', rank: '2', id: '2-diamonds' },
+  { suit: 'clubs', rank: '5', id: '5-clubs' },
+]
+assert.deepEqual(
+  sortHandForDisplay(messyHand).map((c) => c.id),
+  ['3-spades', '10-spades', 'A-hearts', '5-clubs', 'K-clubs', '2-diamonds'],
+)
+assert.deepEqual(sortHandForDisplay([]), [])
 
 const dealOrder = buildDealSequence(['a', 'b', 'c'], 2, 1)
 assert.deepEqual(dealOrder, ['b', 'c', 'a', 'b', 'c', 'a'])
