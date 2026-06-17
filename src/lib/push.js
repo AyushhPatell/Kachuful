@@ -4,7 +4,11 @@ import { app, auth, db, isFirebaseConfigured } from '../firebase/config.js'
 
 // Set after generating a "Web Push certificate" key pair in
 // Firebase Console → Project Settings → Cloud Messaging → Web configuration.
-const VAPID_KEY = (import.meta.env.VITE_FIREBASE_VAPID_KEY ?? '').trim()
+// The VAPID public key is safe to ship client-side (same as the Firebase web
+// config), so hardcode it as a fallback — CI builds don't inject VITE_* env vars.
+const DEFAULT_VAPID_KEY =
+  'BGd6WEvBopdz1qx7k3XLi9ahnqsmHvqJ0RebnCmHnGpLntYRNpDAH1nXZtZM-eLDysPwq4S8zrK2OXJdcfqvagk'
+const VAPID_KEY = (import.meta.env.VITE_FIREBASE_VAPID_KEY ?? '').trim() || DEFAULT_VAPID_KEY
 
 // iOS only supports web push for a standalone (Add to Home Screen) app —
 // requesting permission from a normal Safari tab silently can't work.
@@ -16,7 +20,6 @@ export function isIosNonStandalone() {
 }
 
 export function getPushPermission() {
-  if (isIosNonStandalone()) return 'ios-standalone-required'
   if (typeof Notification === 'undefined') return 'unsupported'
   return Notification.permission
 }

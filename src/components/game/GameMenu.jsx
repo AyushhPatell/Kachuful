@@ -155,11 +155,6 @@ export default function GameMenu({ sessionCode, onLeave, isOwner = false, voteAc
                         <span className="text-base">🔕</span>
                         <span>Notifications blocked in browser settings</span>
                       </div>
-                    ) : pushPermission === 'ios-standalone-required' ? (
-                      <div className="flex w-full items-start gap-3 px-4 py-2.5 text-sm text-zinc-400">
-                        <span className="mt-0.5 shrink-0 text-base">📱</span>
-                        <span className="text-[11px] leading-snug">Add Kachuful to your Home Screen, then enable notifications from there</span>
-                      </div>
                     ) : pushPermission === 'unsupported' ? (
                       <div className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-500">
                         <span className="text-base">🔕</span>
