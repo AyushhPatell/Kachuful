@@ -14,11 +14,13 @@ import {
 assert.equal(getMaxRound(7), 7)
 assert.equal(getMaxRound(4), 8)
 
-assert.equal(getCardsPerRound(1, 8), 1)
-assert.equal(getCardsPerRound(8, 8), 8)
-assert.equal(getCardsPerRound(9, 8), 7)
-assert.equal(getCardsPerRound(15, 8), 1)
-assert.equal(getCardsPerRound(16, 8), 1)
+// Cycle: 1,2,3,4,5,6,7,8,8,7,6,5,4,3,2,1,1,2,... (peak and trough each appear twice)
+assert.equal(getCardsPerRound(1, 8), 1)   // going up
+assert.equal(getCardsPerRound(8, 8), 8)   // peak (up)
+assert.equal(getCardsPerRound(9, 8), 8)   // peak (down) — double peak
+assert.equal(getCardsPerRound(10, 8), 7)  // going down
+assert.equal(getCardsPerRound(16, 8), 1)  // trough (down)
+assert.equal(getCardsPerRound(17, 8), 1)  // trough (up) — double trough, new cycle
 
 assert.equal(getSarForRound(1), 'Ka')
 assert.equal(getSarForRound(2), 'Chu')
