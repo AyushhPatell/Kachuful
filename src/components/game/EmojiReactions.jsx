@@ -22,9 +22,11 @@ function useReactions(session, seated, currentUserId) {
       const seatIndex = seated.findIndex(p => p.id === reaction.userId)
       setFloaters(prev => [...prev, { id, ...reaction, seatIndex }])
 
+      // Never remove from seenRef: Firestore keeps the doc for 500ms after TTL,
+      // so deleting from seenRef early causes the old reaction to re-fire whenever
+      // the subscription re-runs (e.g. when the next emoji is sent).
       setTimeout(() => {
         setFloaters(prev => prev.filter(f => f.id !== id))
-        seenRef.current.delete(id)
       }, REACTION_TTL_MS)
     })
   }, [session?.pendingReactions, seated])
@@ -79,9 +81,13 @@ export function ReactionFloaters({ floaters, seatPositions }) {
 export function EmojiPicker({ sessionCode, userId, disabled }) {
   const [open, setOpen] = useState(false)
   const [sending, setSending] = useState(false)
+  // Ref mirror so the guard is synchronous — React state batching means two
+  // rapid touch events can both pass `if (sending)` before the re-render lands.
+  const sendingRef = useRef(false)
 
   async function handlePick(emoji) {
-    if (sending || disabled) return
+    if (sendingRef.current || disabled) return
+    sendingRef.current = true
     setSending(true)
     setOpen(false)
     try {
@@ -89,7 +95,10 @@ export function EmojiPicker({ sessionCode, userId, disabled }) {
     } catch {
       // Never block gameplay on reaction errors
     } finally {
-      setTimeout(() => setSending(false), 800)
+      setTimeout(() => {
+        sendingRef.current = false
+        setSending(false)
+      }, 800)
     }
   }
 
