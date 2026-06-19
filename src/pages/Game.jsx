@@ -121,15 +121,18 @@ export default function Game() {
     [players, session?.turnOrder],
   )
 
+  // dealerIndex lives on the session doc (alongside turnOrder), not the round
+  // doc — reading round?.dealerIndex always returned undefined→0, which pinned
+  // the dealer (and the "D" badge) to turnOrder[0] every round.
   const dealSequence = useMemo(
-    () => buildDealSequence(activePlayerIds, cardsPerRound, round?.dealerIndex ?? 0),
-    [activePlayerIds, cardsPerRound, round?.dealerIndex],
+    () => buildDealSequence(activePlayerIds, cardsPerRound, session?.dealerIndex ?? 0),
+    [activePlayerIds, cardsPerRound, session?.dealerIndex],
   )
 
   const dealerPlayerId = useMemo(() => {
-    const idx = round?.dealerIndex ?? 0
+    const idx = session?.dealerIndex ?? 0
     return session?.turnOrder?.[idx] ?? null
-  }, [round?.dealerIndex, session?.turnOrder])
+  }, [session?.dealerIndex, session?.turnOrder])
 
   const trickReveal = session?.lastTrickReveal ?? frozenTrickReveal
   const callingPhase = round?.status === ROUND_STATUS.CALLING && tablePhase === 'playing'
@@ -254,7 +257,7 @@ export default function Game() {
     setFrozenTrickReveal(null)
     setDealStep(0)
     return undefined
-  }, [round?.status, roundNumber, round?.dealerIndex])
+  }, [round?.status, roundNumber, session?.dealerIndex])
 
   // When session.currentRound increments (non-host devices), immediately kick off
   // dealing state so there's no blank-table gap while the new round doc loads from Firebase
