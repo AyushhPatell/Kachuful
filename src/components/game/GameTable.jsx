@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { SAR_INFO } from '../../constants/game.js'
-import { calculateRoundPoints, isTrumpCard, sortHandForDisplay } from '../../lib/gameLogic.js'
+import { calculateRoundPoints, getFinalTrickCallout, isTrumpCard, sortHandForDisplay } from '../../lib/gameLogic.js'
 import {
   getSeatHandCount,
   getSeatPositions,
@@ -92,6 +92,20 @@ export default function GameTable({
 
   const dealTargetIndex = seated.findIndex(p => p.id === dealTargetPlayerId)
   const dealFly = dealTargetIndex >= 0 ? seatPositions[dealTargetIndex] : { flyX: 0, flyY: -60 }
+
+  // Clutch callout: on the final trick of a multi-card round (everyone down to
+  // their last card), surface whose exact call hinges on this trick.
+  const inRoundPlayers = seated.filter((p) => p.status === 'active' && p.call != null)
+  const maxRemaining = inRoundPlayers.length
+    ? Math.max(...inRoundPlayers.map((p) => p.handCount ?? 0))
+    : 0
+  const isFinalTrick =
+    tablePhase === 'playing' && !callingPhase && cardsPerRound >= 2 && maxRemaining === 1
+  const finalTrickCallout = isFinalTrick
+    ? getFinalTrickCallout(
+        inRoundPlayers.map((p) => ({ name: p.name, call: p.call, tricksWon: p.tricksWon ?? 0 })),
+      )
+    : null
 
   const playableIds = new Set(playableCards.map(c => c.id))
   const hiddenCardId = flyPlay?.fromLocal ? flyPlay.card?.id : null
@@ -202,6 +216,34 @@ export default function GameTable({
 
         {/* Trump reveal — prominent center announcement at the start of each round */}
         <SarReveal sar={sar} roundNumber={roundNumber} reducedMotion={reducedMotion} />
+
+        {/* Clutch callout — the deciding final trick of the round */}
+        <AnimatePresence>
+          {finalTrickCallout ? (
+            <motion.div
+              key={finalTrickCallout}
+              initial={{ opacity: 0, y: -8, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 24 }}
+              className="pointer-events-none absolute left-1/2 top-[13%] z-30 -translate-x-1/2 whitespace-nowrap"
+            >
+              <div
+                className="flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold text-amber-100"
+                style={{
+                  background: 'rgba(120,30,20,0.72)',
+                  border: '1px solid rgba(251,146,60,0.45)',
+                  boxShadow: '0 0 22px rgba(239,68,68,0.22)',
+                  backdropFilter: 'blur(6px)',
+                  fontFamily: 'Cinzel, serif',
+                }}
+              >
+                <span>🔥</span>
+                {finalTrickCallout}
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
         {/* Center: deck + trick */}
         <div className="absolute left-1/2 top-[44%] z-[15] flex min-h-[100px] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center px-4">
