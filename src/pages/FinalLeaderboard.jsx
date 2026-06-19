@@ -12,6 +12,7 @@ import {
   subscribeToSession,
 } from '../firebase/sessions.js'
 import { computePlayerTitles, getCardsPerRound, rankPlayers } from '../lib/gameLogic.js'
+import { shareResult } from '../lib/shareCard.js'
 import { playSound } from '../lib/sounds.js'
 
 export default function FinalLeaderboard() {
@@ -22,6 +23,7 @@ export default function FinalLeaderboard() {
   const [session, setSession] = useState(null)
   const [rounds, setRounds] = useState([])
   const [rematchBusy, setRematchBusy] = useState(false)
+  const [shareState, setShareState] = useState('idle') // idle | busy | downloaded
 
   useEffect(() => {
     const unsubSession = subscribeToSession(code, setSession)
@@ -66,6 +68,27 @@ export default function FinalLeaderboard() {
   const titles = computePlayerTitles(ranked, rounds)
   const rankRing = (rank) =>
     rank === 1 ? '#fbbf24' : rank === 2 ? '#94a3b8' : rank === 3 ? '#b87333' : null
+
+  async function handleShare() {
+    setShareState('busy')
+    try {
+      const result = await shareResult({
+        players: ranked.map((p) => ({
+          name: p.name,
+          score: p.sessionScore ?? 0,
+          rank: p.rank,
+          isMe: p.id === userId,
+          title: titles[p.id] ?? null,
+        })),
+        totalRounds: rounds.length || session?.currentRound || 0,
+        dateLabel: new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+      })
+      setShareState(result === 'downloaded' ? 'downloaded' : 'idle')
+    } catch (err) {
+      console.error(err)
+      setShareState('idle')
+    }
+  }
 
   useEffect(() => {
     if (!ranked.length) return
@@ -239,6 +262,24 @@ export default function FinalLeaderboard() {
         >
           A rematch lobby is ready — jump back in!
         </motion.p>
+      )}
+
+      {/* Share result */}
+      {ranked.length > 0 && (
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          disabled={shareState === 'busy'}
+          onClick={handleShare}
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-amber-200 disabled:opacity-50"
+          style={{ background: 'rgba(201,150,58,0.12)', border: '1px solid rgba(201,150,58,0.35)' }}
+        >
+          <span className="text-base">📤</span>
+          {shareState === 'busy'
+            ? 'Preparing…'
+            : shareState === 'downloaded'
+            ? 'Saved! Share the image 🎉'
+            : 'Share result'}
+        </motion.button>
       )}
 
       {/* CTAs */}
