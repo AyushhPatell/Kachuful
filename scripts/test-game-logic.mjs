@@ -4,6 +4,7 @@ import { buildDealSequence, cardsDealtToPlayer } from '../src/lib/dealSequence.j
 import {
   calculateRoundPoints,
   computePlayerTitles,
+  computeSessionTotals,
   evaluateTrickWinner,
   getCardsPerRound,
   getFinalTrickCallout,
@@ -115,6 +116,19 @@ const computedTitles = computePlayerTitles(titlePlayers, titleRounds)
 assert.equal(computedTitles.alice.label, 'Sharpshooter') // 3/3 made
 assert.equal(computedTitles.bob.label, 'Daredevil')      // 12 tricks called
 assert.equal(computePlayerTitles([], []).alice, undefined)
+
+// Session totals derived from round results (rank board must match the breakdown)
+const totalsRounds = [
+  { roundNumber: 1, results: { a: { call: 1, won: 1, points: 11 }, b: { call: 2, won: 1, points: 0 } } },
+  { roundNumber: 2, results: { a: { call: 0, won: 0, points: 10 }, b: { call: 1, won: 1, points: 11 } } },
+  { roundNumber: 3, results: { a: { call: 2, won: 0, points: 0 }, b: { call: 0, won: 0, points: 10 } } },
+]
+const sessionTotals = computeSessionTotals(totalsRounds)
+assert.equal(sessionTotals.totals.a, 21) // 11 + 10 + 0
+assert.equal(sessionTotals.totals.b, 21) // 0 + 11 + 10
+assert.equal(sessionTotals.failed.a, 1)  // only round 3 missed
+assert.equal(sessionTotals.failed.b, 1)  // only round 1 missed
+assert.deepEqual(computeSessionTotals([]).totals, {})
 
 // On-pace glow logic
 assert.equal(isCallStillPossible(2, 0, 3), true)   // needs 2, 3 cards left

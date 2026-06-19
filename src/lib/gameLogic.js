@@ -158,6 +158,24 @@ export function evaluateTrickWinner(cardsOnTable, sar) {
   return winner
 }
 
+/**
+ * Sum each player's points and count their failed rounds (points === 0, i.e.
+ * didn't make their exact call) straight from the per-round results — the
+ * authoritative score source. `rounds`: [{ results: { [id]: { points } } }].
+ * Returns { totals: { [id]: number }, failed: { [id]: number } }.
+ */
+export function computeSessionTotals(rounds) {
+  const totals = {}
+  const failed = {}
+  for (const r of rounds ?? []) {
+    for (const [id, res] of Object.entries(r.results ?? {})) {
+      totals[id] = (totals[id] ?? 0) + (res.points ?? 0)
+      failed[id] = (failed[id] ?? 0) + (res.points === 0 ? 1 : 0)
+    }
+  }
+  return { totals, failed }
+}
+
 /** Rank players for final leaderboard; fewer failed rounds wins ties. */
 export function rankPlayers(players) {
   const sorted = [...players].sort((a, b) => {

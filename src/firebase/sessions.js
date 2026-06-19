@@ -742,29 +742,40 @@ export async function acknowledgeTrickReveal(code) {
 // re-scored every subsequent round off their stale call/tricksWon instead
 // of their score freezing at the point they left.
 async function finalizeRoundScores(code, roundNumber, turnOrder) {
-  const roundSnap = await getDoc(roundRef(code, roundNumber))
-  const existingResults = roundSnap.data()?.results ?? {}
-  if (Object.keys(existingResults).length > 0) return
+  // Runs in a transaction because every player's device calls
+  // acknowledgeTrickReveal → finalizeRoundScores for the same final trick.
+  // Without atomicity those concurrent calls each pass the "already scored?"
+  // check and accumulate sessionScore/roundsFailed multiple times. Writing the
+  // round's results doc is the lock: the first commit populates it, later
+  // transactions see it and bail, so each round is scored exactly once.
+  await runTransaction(db, async (transaction) => {
+    const rRef = roundRef(code, roundNumber)
+    const roundSnap = await transaction.get(rRef)
+    const existingResults = roundSnap.data()?.results ?? {}
+    if (Object.keys(existingResults).length > 0) return // already scored
 
-  const results = {}
+    // All reads must precede all writes in a Firestore transaction.
+    const playerEntries = []
+    for (const id of turnOrder) {
+      const pRef = playerRef(code, id)
+      const snap = await transaction.get(pRef)
+      if (snap.exists()) playerEntries.push({ ref: pRef, id, data: snap.data() })
+    }
 
-  for (const id of turnOrder) {
-    const snap = await getDoc(playerRef(code, id))
-    if (!snap.exists()) continue
-    const data = snap.data()
-    const call = data.call ?? 0
-    const won = data.tricksWon ?? 0
-    const points = calculateRoundPoints(call, won)
+    const results = {}
+    for (const { ref, id, data } of playerEntries) {
+      const call = data.call ?? 0
+      const won = data.tricksWon ?? 0
+      const points = calculateRoundPoints(call, won)
+      results[id] = { call, won, points }
+      transaction.update(ref, {
+        sessionScore: (data.sessionScore ?? 0) + points,
+        roundsFailed: (data.roundsFailed ?? 0) + (points === 0 ? 1 : 0),
+      })
+    }
 
-    results[id] = { call, won, points }
-
-    await updateDoc(playerRef(code, id), {
-      sessionScore: (data.sessionScore ?? 0) + points,
-      roundsFailed: (data.roundsFailed ?? 0) + (points === 0 ? 1 : 0),
-    })
-  }
-
-  await updateDoc(roundRef(code, roundNumber), { results })
+    transaction.update(rRef, { results })
+  })
 }
 
 export async function advanceToNextRound(code) {
