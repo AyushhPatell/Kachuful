@@ -24,7 +24,9 @@ export default function RoundScoreOverlay({
 
   const me = players?.find(p => p.id === currentUserId)
   const myPts = me ? calculateRoundPoints(me.call ?? 0, me.tricksWon ?? 0) : 0
-  const madCall = me != null && (me.tricksWon ?? 0) >= (me.call ?? 0) && me.call != null
+  // Exact-call game: you only "make" it by hitting your number precisely.
+  const madCall = me != null && me.call != null && (me.tricksWon ?? 0) === me.call
+  const missedCall = me != null && me.call != null && (me.tricksWon ?? 0) !== me.call
 
   const endVoteActive = round?.endVoteActive === true
 
@@ -91,12 +93,25 @@ export default function RoundScoreOverlay({
               <p className="text-[10px] uppercase tracking-[0.25em] text-amber-400/65">
                 Round {roundNumber} Results
               </p>
-              <p
-                className="mt-1 text-xl font-bold text-amber-300"
-                style={{ fontFamily: 'Cinzel, serif' }}
+              <motion.p
+                key={madCall ? 'spot' : missedCall ? 'bust' : 'over'}
+                initial={{ opacity: 0 }}
+                animate={
+                  madCall
+                    ? { scale: [0.8, 1.12, 1], opacity: 1 }
+                    : missedCall
+                    ? { x: [0, -7, 7, -5, 5, 0], opacity: 1 }
+                    : { opacity: 1 }
+                }
+                transition={{ duration: madCall ? 0.5 : missedCall ? 0.45 : 0.3 }}
+                className="mt-1 text-xl font-bold"
+                style={{
+                  fontFamily: 'Cinzel, serif',
+                  color: madCall ? '#34d399' : missedCall ? '#f87171' : '#fcd34d',
+                }}
               >
-                {madCall ? '✓ Call Made!' : 'Round Over'}
-              </p>
+                {madCall ? '🎯 Spot On!' : missedCall ? '💥 Busted!' : 'Round Over'}
+              </motion.p>
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
                 <GameMenu sessionCode={sessionCode} onLeave={onLeave} />
               </div>
@@ -106,7 +121,7 @@ export default function RoundScoreOverlay({
             <div className="divide-y divide-white/[0.05] px-3 py-1">
               {sorted.map((player, i) => {
                 const pts = calculateRoundPoints(player.call ?? 0, player.tricksWon ?? 0)
-                const made = (player.tricksWon ?? 0) >= (player.call ?? 0) && player.call != null
+                const made = player.call != null && (player.tricksWon ?? 0) === player.call
                 const isMe = player.id === currentUserId
                 const offline = isPlayerOffline(player) || player.status === 'disconnected'
 

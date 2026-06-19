@@ -32,7 +32,7 @@ import {
   subscribeToSession,
 } from '../firebase/sessions.js'
 import { buildDealSequence, cardsDealtToPlayer } from '../lib/dealSequence.js'
-import { getCardsPerRound, getPlayableCards, isTrumpCard, resolveSarForRound } from '../lib/gameLogic.js'
+import { getCardsPerRound, getPlayableCards, isCallStillPossible, isTrumpCard, resolveSarForRound } from '../lib/gameLogic.js'
 import { getLegalCalls } from '../lib/callValidation.js'
 import { hapticTrickWon, hapticYourTurn } from '../lib/haptics.js'
 import { getSeatPositions, orderPlayersForTable } from '../lib/seatLayout.js'
@@ -724,30 +724,43 @@ export default function Game() {
         </div>
       ) : null}
 
-      {/* My call/tricks badge — shown during playing phase once I've called */}
-      {!isSpectator && me?.call != null && playingPhase ? (
-        <div
-          className="pointer-events-none absolute right-3 z-30 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-medium backdrop-blur-sm"
-          style={{
-            bottom: 'max(7.5rem, calc(7.5rem + env(safe-area-inset-bottom)))',
-            background: 'rgba(0,0,0,0.52)',
-            border: '1px solid rgba(255,255,255,0.1)',
-          }}
-        >
-          <span
-            className={`tabular-nums font-bold ${
-              (me.tricksWon ?? 0) >= me.call && me.call > 0
-                ? 'text-emerald-400'
-                : 'text-amber-200'
-            }`}
+      {/* My call/tricks badge — shown during playing phase once I've called.
+          Tinted by whether I can still hit my exact call (on-pace glow). */}
+      {!isSpectator && me?.call != null && playingPhase ? (() => {
+        const paceOk = isCallStillPossible(me.call, me.tricksWon ?? 0, me.handCount ?? me.hand?.length ?? 0)
+        return (
+          <div
+            className="pointer-events-none absolute right-3 z-30 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-medium backdrop-blur-sm"
+            style={{
+              bottom: 'max(7.5rem, calc(7.5rem + env(safe-area-inset-bottom)))',
+              background:
+                paceOk === false ? 'rgba(239,68,68,0.18)' : paceOk === true ? 'rgba(34,197,94,0.15)' : 'rgba(0,0,0,0.52)',
+              border:
+                paceOk === false
+                  ? '1px solid rgba(239,68,68,0.42)'
+                  : paceOk === true
+                  ? '1px solid rgba(34,197,94,0.40)'
+                  : '1px solid rgba(255,255,255,0.1)',
+              transition: 'background 0.4s, border 0.4s',
+            }}
           >
-            {me.tricksWon ?? 0}
-          </span>
-          <span className="text-zinc-600">/</span>
-          <span className="tabular-nums text-zinc-400">{me.call}</span>
-          <span className="text-zinc-600">tricks</span>
-        </div>
-      ) : null}
+            <span
+              className={`tabular-nums font-bold ${
+                paceOk === false
+                  ? 'text-red-300'
+                  : (me.tricksWon ?? 0) === me.call
+                  ? 'text-emerald-300'
+                  : 'text-amber-200'
+              }`}
+            >
+              {me.tricksWon ?? 0}
+            </span>
+            <span className="text-zinc-500">/</span>
+            <span className="tabular-nums text-zinc-300">{me.call}</span>
+            <span className="text-zinc-500">tricks</span>
+          </div>
+        )
+      })() : null}
 
       {/* Desktop: collapsible call panel — bottom-right, doesn't cover hand */}
       {showCallPicker ? (

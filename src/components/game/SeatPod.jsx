@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { isCallStillPossible } from '../../lib/gameLogic.js'
 import CardStackBadge from './CardStackBadge.jsx'
 import PlayerAvatar from './PlayerAvatar.jsx'
 
@@ -20,6 +21,17 @@ export default function SeatPod({
   const isSpectator = player.status === 'spectator'
   const isDisconnected = player.status === 'disconnected'
 
+  // On-pace glow: soft green while the player can still make their exact call,
+  // soft red once it's out of reach. Only while cards are actually being played
+  // (calls locked) and only on a resting pod — the turn/winner amber wins out.
+  const inPlay =
+    !callingPhase &&
+    !isSpectator &&
+    !isDisconnected &&
+    (tablePhase === 'playing' || tablePhase === 'trick-won' || tablePhase === 'collect')
+  const pacePossible = inPlay ? isCallStillPossible(player.call, player.tricksWon ?? 0, handCount) : null
+  const paceState = pacePossible == null ? null : pacePossible ? 'ontrack' : 'busted'
+
   return (
     <div className="flex flex-col items-center gap-1" style={{ width: compact ? 76 : 94 }}>
 
@@ -39,6 +51,10 @@ export default function SeatPod({
             ? 'rgba(245,158,11,0.14)'
             : receivingDeal
             ? 'rgba(255,255,255,0.07)'
+            : paceState === 'ontrack'
+            ? 'rgba(34,197,94,0.10)'
+            : paceState === 'busted'
+            ? 'rgba(239,68,68,0.10)'
             : 'rgba(0,0,0,0.42)',
           backdropFilter: 'blur(8px)',
           border: isDisconnected
@@ -49,6 +65,10 @@ export default function SeatPod({
             ? '1.5px solid rgba(251,191,36,0.65)'
             : isActive
             ? '1.5px solid rgba(245,158,11,0.55)'
+            : paceState === 'ontrack'
+            ? '1px solid rgba(34,197,94,0.30)'
+            : paceState === 'busted'
+            ? '1px solid rgba(239,68,68,0.30)'
             : '1px solid rgba(255,255,255,0.09)',
           boxShadow: isActive
             ? '0 0 22px rgba(245,158,11,0.32), 0 4px 16px rgba(0,0,0,0.4)'

@@ -82,6 +82,35 @@ export function calculateRoundPoints(call, tricksWon) {
 }
 
 /**
+ * True while a player can still hit their exact call this round; false once
+ * it's impossible (already overshot, or not enough tricks left to reach it).
+ * Returns null when the player hasn't called. Used for the on-pace glow.
+ */
+export function isCallStillPossible(call, tricksWon, cardsLeft) {
+  if (call == null) return null
+  const won = tricksWon ?? 0
+  const left = cardsLeft ?? 0
+  if (won > call) return false
+  if (call - won > left) return false
+  return true
+}
+
+/**
+ * Drama line for the final trick of a round. `inRound` is the players still
+ * holding their last card: [{ name, call, tricksWon }]. Returns a short
+ * callout string, or null when nobody's call hinges on this trick.
+ */
+export function getFinalTrickCallout(inRound) {
+  const live = (inRound ?? []).filter((p) => p.call != null)
+  const needWin = live.filter((p) => p.call - (p.tricksWon ?? 0) === 1)
+  const mustAvoid = live.filter((p) => (p.tricksWon ?? 0) === p.call)
+  if (needWin.length === 1) return `${needWin[0].name} needs this trick!`
+  if (needWin.length >= 2) return 'Last trick decides it!'
+  if (mustAvoid.length >= 1) return 'Final trick — hold your nerve!'
+  return null
+}
+
+/**
  * Cards the player is allowed to play.
  * Must follow led suit when possible.
  */

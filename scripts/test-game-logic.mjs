@@ -6,8 +6,10 @@ import {
   computePlayerTitles,
   evaluateTrickWinner,
   getCardsPerRound,
+  getFinalTrickCallout,
   getMaxRound,
   getSarForRound,
+  isCallStillPossible,
   resolveSarForRound,
   resolveVote,
   sortHandForDisplay,
@@ -113,6 +115,27 @@ const computedTitles = computePlayerTitles(titlePlayers, titleRounds)
 assert.equal(computedTitles.alice.label, 'Sharpshooter') // 3/3 made
 assert.equal(computedTitles.bob.label, 'Daredevil')      // 12 tricks called
 assert.equal(computePlayerTitles([], []).alice, undefined)
+
+// On-pace glow logic
+assert.equal(isCallStillPossible(2, 0, 3), true)   // needs 2, 3 cards left
+assert.equal(isCallStillPossible(2, 2, 1), true)   // exactly on it, still possible (could overshoot)
+assert.equal(isCallStillPossible(2, 3, 0), false)  // overshot
+assert.equal(isCallStillPossible(3, 1, 1), false)  // needs 2 more, only 1 card left
+assert.equal(isCallStillPossible(0, 0, 2), true)   // nil, still clean
+assert.equal(isCallStillPossible(0, 1, 1), false)  // nil broken
+assert.equal(isCallStillPossible(null, 0, 3), null)
+
+// Final-trick clutch callout
+assert.equal(
+  getFinalTrickCallout([{ name: 'Ayush', call: 2, tricksWon: 1 }, { name: 'Brij', call: 1, tricksWon: 1 }]),
+  'Ayush needs this trick!',
+)
+assert.equal(
+  getFinalTrickCallout([{ name: 'A', call: 2, tricksWon: 1 }, { name: 'B', call: 1, tricksWon: 0 }]),
+  'Last trick decides it!',
+)
+assert.equal(getFinalTrickCallout([{ name: 'A', call: 0, tricksWon: 0 }]), 'Final trick — hold your nerve!')
+assert.equal(getFinalTrickCallout([{ name: 'A', call: 3, tricksWon: 0 }]), null) // already out of reach
 
 const dealOrder = buildDealSequence(['a', 'b', 'c'], 2, 1)
 assert.deepEqual(dealOrder, ['b', 'c', 'a', 'b', 'c', 'a'])
