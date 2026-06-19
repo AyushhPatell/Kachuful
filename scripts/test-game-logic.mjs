@@ -3,6 +3,7 @@ import { isCallLegal } from '../src/lib/callValidation.js'
 import { buildDealSequence, cardsDealtToPlayer } from '../src/lib/dealSequence.js'
 import {
   calculateRoundPoints,
+  computePlayerTitles,
   evaluateTrickWinner,
   getCardsPerRound,
   getMaxRound,
@@ -100,6 +101,18 @@ assert.deepEqual(
   ['3-spades', '10-spades', 'A-hearts', '5-clubs', 'K-clubs', '2-diamonds'],
 )
 assert.deepEqual(sortHandForDisplay([]), [])
+
+// Player titles: alice nails every call (Sharpshooter), bob calls big (Daredevil)
+const titlePlayers = [{ id: 'alice' }, { id: 'bob' }, { id: 'carol' }]
+const titleRounds = [
+  { roundNumber: 1, results: { alice: { call: 1, won: 1, points: 11 }, bob: { call: 3, won: 1, points: 0 }, carol: { call: 0, won: 0, points: 10 } } },
+  { roundNumber: 2, results: { alice: { call: 2, won: 2, points: 20 }, bob: { call: 4, won: 2, points: 0 }, carol: { call: 0, won: 1, points: 0 } } },
+  { roundNumber: 3, results: { alice: { call: 1, won: 1, points: 11 }, bob: { call: 5, won: 5, points: 50 }, carol: { call: 1, won: 0, points: 0 } } },
+]
+const computedTitles = computePlayerTitles(titlePlayers, titleRounds)
+assert.equal(computedTitles.alice.label, 'Sharpshooter') // 3/3 made
+assert.equal(computedTitles.bob.label, 'Daredevil')      // 12 tricks called
+assert.equal(computePlayerTitles([], []).alice, undefined)
 
 const dealOrder = buildDealSequence(['a', 'b', 'c'], 2, 1)
 assert.deepEqual(dealOrder, ['b', 'c', 'a', 'b', 'c', 'a'])

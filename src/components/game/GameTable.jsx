@@ -150,7 +150,20 @@ export default function GameTable({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {sarInfo ? <SarBadge sar={sar} compact /> : null}
+            {sarInfo ? (
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={sar}
+                  initial={{ rotateY: 90, scale: 0.7, opacity: 0 }}
+                  animate={{ rotateY: 0, scale: 1, opacity: 1 }}
+                  exit={{ opacity: 0, scale: 0.85 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+                  style={{ transformPerspective: 600 }}
+                >
+                  <SarBadge sar={sar} compact />
+                </motion.div>
+              </AnimatePresence>
+            ) : null}
             {sessionCode ? (
               <GameMenu
                 sessionCode={sessionCode}

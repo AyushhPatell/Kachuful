@@ -159,6 +159,66 @@ export function rankPlayers(players) {
   return ranked
 }
 
+/**
+ * Award one fun epithet to each notable player based on how the finished
+ * session played out. Pure — takes the players and the round-by-round results
+ * ([{ roundNumber, results: { [id]: { call, won, points } } }]). Returns
+ * { [playerId]: { label, emoji } }, at most one title per player.
+ */
+export function computePlayerTitles(players, rounds) {
+  const stats = {}
+  for (const p of players) {
+    stats[p.id] = { participated: 0, made: 0, totalCalled: 0, nils: 0, streak: 0, bestStreak: 0 }
+  }
+
+  const ordered = [...(rounds ?? [])].sort((a, b) => a.roundNumber - b.roundNumber)
+  for (const r of ordered) {
+    for (const p of players) {
+      const s = stats[p.id]
+      const res = r.results?.[p.id]
+      if (!res) { s.streak = 0; continue }
+      s.participated += 1
+      s.totalCalled += res.call ?? 0
+      const made = (res.call ?? 0) === (res.won ?? 0)
+      if (made) {
+        s.made += 1
+        s.streak += 1
+        if (s.streak > s.bestStreak) s.bestStreak = s.streak
+        if ((res.call ?? 0) === 0) s.nils += 1
+      } else {
+        s.streak = 0
+      }
+    }
+  }
+
+  const categories = [
+    { label: 'Sharpshooter', emoji: '🎯', eligible: (s) => s.participated >= 2 && s.made >= 1, value: (s) => s.made / s.participated },
+    { label: 'Daredevil',    emoji: '😈', eligible: (s) => s.totalCalled >= 1,                  value: (s) => s.totalCalled },
+    { label: 'Nil Master',   emoji: '🧊', eligible: (s) => s.nils >= 1,                         value: (s) => s.nils },
+    { label: 'On Fire',      emoji: '🔥', eligible: (s) => s.bestStreak >= 3,                   value: (s) => s.bestStreak },
+    { label: 'Steady Hand',  emoji: '💎', eligible: (s) => s.participated >= 3,                 value: (s) => s.made },
+  ]
+
+  const titles = {}
+  const taken = new Set()
+  for (const cat of categories) {
+    let bestId = null
+    let bestVal = -Infinity
+    for (const p of players) {
+      if (taken.has(p.id)) continue
+      const s = stats[p.id]
+      if (!cat.eligible(s)) continue
+      const v = cat.value(s)
+      if (v > bestVal) { bestVal = v; bestId = p.id }
+    }
+    if (bestId != null) {
+      titles[bestId] = { label: cat.label, emoji: cat.emoji }
+      taken.add(bestId)
+    }
+  }
+  return titles
+}
+
 /** Majority vote; tie defaults to continuing. */
 export function resolveVote(votes) {
   const values = Object.values(votes)

@@ -5,12 +5,13 @@ import confetti from 'canvas-confetti'
 import PlayerAvatar from '../components/game/PlayerAvatar.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
+  fetchSessionRounds,
   initiateRematch,
   requestJoinSession,
   subscribeToPlayers,
   subscribeToSession,
 } from '../firebase/sessions.js'
-import { rankPlayers } from '../lib/gameLogic.js'
+import { computePlayerTitles, getCardsPerRound, rankPlayers } from '../lib/gameLogic.js'
 import { playSound } from '../lib/sounds.js'
 
 export default function FinalLeaderboard() {
@@ -19,12 +20,17 @@ export default function FinalLeaderboard() {
   const { userId, displayName } = useAuth()
   const [players, setPlayers] = useState([])
   const [session, setSession] = useState(null)
+  const [rounds, setRounds] = useState([])
   const [rematchBusy, setRematchBusy] = useState(false)
 
   useEffect(() => {
     const unsubSession = subscribeToSession(code, setSession)
     const unsubPlayers = subscribeToPlayers(code, setPlayers)
     return () => { unsubSession(); unsubPlayers() }
+  }, [code])
+
+  useEffect(() => {
+    fetchSessionRounds(code).then(setRounds).catch(() => {})
   }, [code])
 
   async function handlePlayAgain() {
@@ -52,6 +58,14 @@ export default function FinalLeaderboard() {
   const ranked = rankPlayers(players.filter(p => p.status !== 'spectator'))
   const winner = ranked[0]
   const isWinner = winner?.id === userId
+  // Only the original host may start the rematch — createSession makes the
+  // creator the owner, so if anyone else clicked first they'd hijack ownership.
+  const isOwner = session?.ownerId === userId
+
+  // Earned epithets (Sharpshooter, Daredevil, …) + gold/silver/bronze frames.
+  const titles = computePlayerTitles(ranked, rounds)
+  const rankRing = (rank) =>
+    rank === 1 ? '#fbbf24' : rank === 2 ? '#94a3b8' : rank === 3 ? '#b87333' : null
 
   useEffect(() => {
     if (!ranked.length) return
@@ -153,16 +167,24 @@ export default function FinalLeaderboard() {
               >
                 {player.rank}
               </span>
-              <PlayerAvatar name={player.name} photoURL={player.photoURL} size="sm" />
-              <span className={`flex-1 truncate text-sm font-medium ${isMe ? 'text-amber-200' : 'text-zinc-200'}`}>
-                {player.name}
-                {isMe && <span className="ml-1 text-[10px] text-zinc-500">(you)</span>}
-                {isTied && (
-                  <span className="ml-1.5 rounded bg-zinc-800 px-1 py-0.5 text-[9px] text-zinc-500">
-                    tie
+              <PlayerAvatar name={player.name} photoURL={player.photoURL} size="sm" ringColor={rankRing(player.rank)} />
+              <div className="min-w-0 flex-1">
+                <div className={`truncate text-sm font-medium ${isMe ? 'text-amber-200' : 'text-zinc-200'}`}>
+                  {player.name}
+                  {isMe && <span className="ml-1 text-[10px] text-zinc-500">(you)</span>}
+                  {isTied && (
+                    <span className="ml-1.5 rounded bg-zinc-800 px-1 py-0.5 text-[9px] text-zinc-500">
+                      tie
+                    </span>
+                  )}
+                </div>
+                {titles[player.id] && (
+                  <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-amber-500/12 px-1.5 py-0.5 text-[9px] font-medium text-amber-200/90">
+                    <span>{titles[player.id].emoji}</span>
+                    <span>{titles[player.id].label}</span>
                   </span>
                 )}
-              </span>
+              </div>
               <motion.span
                 initial={{ scale: 0.6, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -181,6 +203,16 @@ export default function FinalLeaderboard() {
           <p className="px-4 py-6 text-center text-sm text-zinc-600">Loading results…</p>
         )}
       </motion.div>
+
+      {/* Round-by-round breakdown — lets players verify how every score was reached */}
+      {rounds.length > 0 && ranked.length > 0 && (
+        <RoundBreakdown
+          rounds={rounds}
+          players={ranked}
+          userId={userId}
+          maxRound={session?.maxRound ?? 8}
+        />
+      )}
 
       {/* Tie-break note */}
       {hasTies && (
@@ -220,22 +252,40 @@ export default function FinalLeaderboard() {
             Back to Home
           </motion.button>
         </Link>
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          disabled={rematchBusy}
-          onClick={session?.rematchCode ? handleJoinRematch : handlePlayAgain}
-          className="flex-1 rounded-xl py-3.5 text-sm font-bold text-white disabled:opacity-50"
-          style={{
-            background: 'linear-gradient(135deg, #c9963a, #a67828)',
-            boxShadow: '0 4px 20px rgba(201,150,58,0.3)',
-          }}
-        >
-          {rematchBusy
-            ? 'One sec…'
-            : session?.rematchCode
-            ? 'Join Rematch →'
-            : 'Play Again →'}
-        </motion.button>
+        {session?.rematchCode ? (
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            disabled={rematchBusy}
+            onClick={handleJoinRematch}
+            className="flex-1 rounded-xl py-3.5 text-sm font-bold text-white disabled:opacity-50"
+            style={{
+              background: 'linear-gradient(135deg, #c9963a, #a67828)',
+              boxShadow: '0 4px 20px rgba(201,150,58,0.3)',
+            }}
+          >
+            {rematchBusy ? 'One sec…' : 'Join Rematch →'}
+          </motion.button>
+        ) : isOwner ? (
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            disabled={rematchBusy}
+            onClick={handlePlayAgain}
+            className="flex-1 rounded-xl py-3.5 text-sm font-bold text-white disabled:opacity-50"
+            style={{
+              background: 'linear-gradient(135deg, #c9963a, #a67828)',
+              boxShadow: '0 4px 20px rgba(201,150,58,0.3)',
+            }}
+          >
+            {rematchBusy ? 'One sec…' : 'Play Again →'}
+          </motion.button>
+        ) : (
+          <div
+            className="flex-1 rounded-xl py-3.5 text-center text-sm font-semibold text-zinc-400"
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            Waiting for host…
+          </div>
+        )}
       </div>
     </div>
   )
@@ -258,7 +308,12 @@ function PodiumSlot({ player, rank, delay, userId }) {
       transition={{ delay, type: 'spring', stiffness: 260, damping: 24 }}
       className="flex flex-1 flex-col items-center gap-1.5"
     >
-      <PlayerAvatar name={player.name} photoURL={player.photoURL} size={rank === 1 ? 'lg' : 'md'} />
+      <PlayerAvatar
+        name={player.name}
+        photoURL={player.photoURL}
+        size={rank === 1 ? 'lg' : 'md'}
+        ringColor={rank === 1 ? '#fbbf24' : rank === 2 ? '#94a3b8' : '#b87333'}
+      />
       <p className={`max-w-[70px] truncate text-center text-[11px] font-semibold ${isMe ? 'text-amber-200' : 'text-zinc-300'}`}>
         {player.name}
       </p>
@@ -268,6 +323,109 @@ function PodiumSlot({ player, rank, delay, userId }) {
         style={{ background: colors[rank] }}
       >
         {labels[rank]}
+      </div>
+    </motion.div>
+  )
+}
+
+function RoundBreakdown({ rounds, players, userId, maxRound }) {
+  // Cumulative total per player — should match each player's final score,
+  // which is the whole point: players can audit every round's contribution.
+  const totals = {}
+  players.forEach((p) => { totals[p.id] = 0 })
+  rounds.forEach((r) => {
+    players.forEach((p) => { totals[p.id] += r.results[p.id]?.points ?? 0 })
+  })
+
+  const cellBg = 'rgba(24,28,23,0.95)'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.5 }}
+      className="w-full overflow-hidden rounded-2xl"
+      style={{ background: 'rgba(24,28,23,0.9)', border: '1px solid rgba(255,255,255,0.08)' }}
+    >
+      <div className="border-b border-white/5 px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Round-by-round</p>
+        <p className="mt-0.5 text-[10px] text-zinc-600">Each cell: points · called/won. Totals match the final scores above.</p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-center">
+          <thead>
+            <tr>
+              <th
+                className="sticky left-0 z-10 px-2 py-2 text-left text-[10px] font-medium text-zinc-500"
+                style={{ background: cellBg }}
+              >
+                Rd
+              </th>
+              {players.map((p) => {
+                const isMe = p.id === userId
+                return (
+                  <th key={p.id} className="px-1 py-2 align-bottom" style={{ minWidth: 50 }}>
+                    <div className="flex flex-col items-center gap-1">
+                      <PlayerAvatar name={p.name} photoURL={p.photoURL} size="sm" />
+                      <span className={`max-w-[48px] truncate text-[9px] font-medium ${isMe ? 'text-amber-200' : 'text-zinc-400'}`}>
+                        {isMe ? 'You' : p.name}
+                      </span>
+                    </div>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {rounds.map((r) => {
+              const cards = getCardsPerRound(r.roundNumber, maxRound)
+              return (
+                <tr key={r.roundNumber} className="border-t border-white/5">
+                  <td
+                    className="sticky left-0 z-10 px-2 py-1.5 text-left"
+                    style={{ background: cellBg }}
+                  >
+                    <span className="text-[11px] font-semibold text-zinc-300">R{r.roundNumber}</span>
+                    <span className="ml-1 text-[8px] text-zinc-600">{cards}c</span>
+                  </td>
+                  {players.map((p) => {
+                    const res = r.results[p.id]
+                    if (!res) {
+                      return <td key={p.id} className="px-1 py-1.5 text-[10px] text-zinc-700">–</td>
+                    }
+                    return (
+                      <td key={p.id} className="px-1 py-1.5">
+                        <div className={`text-[11px] font-bold leading-tight ${res.points > 0 ? 'text-amber-300' : 'text-zinc-600'}`}>
+                          {res.points > 0 ? `+${res.points}` : '0'}
+                        </div>
+                        <div className="text-[8px] leading-tight text-zinc-500">{res.call}/{res.won}</div>
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-white/10">
+              <td
+                className="sticky left-0 z-10 px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-zinc-500"
+                style={{ background: cellBg }}
+              >
+                Total
+              </td>
+              {players.map((p) => {
+                const isMe = p.id === userId
+                return (
+                  <td key={p.id} className={`px-1 py-2 text-[13px] font-bold ${isMe ? 'text-amber-200' : 'text-zinc-200'}`}>
+                    {totals[p.id]}
+                  </td>
+                )
+              })}
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </motion.div>
   )
