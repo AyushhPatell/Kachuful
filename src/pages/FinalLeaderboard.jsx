@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import confetti from 'canvas-confetti'
@@ -11,7 +11,7 @@ import {
   subscribeToPlayers,
   subscribeToSession,
 } from '../firebase/sessions.js'
-import { computePlayerTitles, getCardsPerRound, rankPlayers } from '../lib/gameLogic.js'
+import { computePlayerTitles, computeSessionTotals, getCardsPerRound, rankPlayers } from '../lib/gameLogic.js'
 import { shareResult } from '../lib/shareCard.js'
 import { playSound } from '../lib/sounds.js'
 
@@ -22,6 +22,7 @@ export default function FinalLeaderboard() {
   const [players, setPlayers] = useState([])
   const [session, setSession] = useState(null)
   const [rounds, setRounds] = useState([])
+  const [roundsLoaded, setRoundsLoaded] = useState(false)
   const [rematchBusy, setRematchBusy] = useState(false)
   const [shareState, setShareState] = useState('idle') // idle | busy | downloaded
 
@@ -32,7 +33,7 @@ export default function FinalLeaderboard() {
   }, [code])
 
   useEffect(() => {
-    fetchSessionRounds(code).then(setRounds).catch(() => {})
+    fetchSessionRounds(code).then(setRounds).catch(() => {}).finally(() => setRoundsLoaded(true))
   }, [code])
 
   async function handlePlayAgain() {
@@ -57,7 +58,20 @@ export default function FinalLeaderboard() {
     }
   }
 
-  const ranked = rankPlayers(players.filter(p => p.status !== 'spectator'))
+  // Derive each player's true total and failed count straight from the round
+  // results — the source of truth. The stored sessionScore/roundsFailed fields
+  // were inflated by an old double-count race, so the rank board must not trust
+  // them; this keeps the standings exactly consistent with the breakdown below.
+  const derived = useMemo(() => computeSessionTotals(rounds), [rounds])
+
+  // Always derive from the round results — never trust the stored (inflated)
+  // sessionScore. Until the round data has loaded we hold a "tallying" state
+  // (see below) rather than briefly flashing a wrong number.
+  const scoredPlayers = players
+    .filter(p => p.status !== 'spectator')
+    .map(p => ({ ...p, sessionScore: derived.totals[p.id] ?? 0, roundsFailed: derived.failed[p.id] ?? 0 }))
+  const ranked = rankPlayers(scoredPlayers)
+  const ready = roundsLoaded && players.length > 0
   const winner = ranked[0]
   const isWinner = winner?.id === userId
   // Only the original host may start the rematch — createSession makes the
@@ -91,7 +105,7 @@ export default function FinalLeaderboard() {
   }
 
   useEffect(() => {
-    if (!ranked.length) return
+    if (!ready) return
     playSound('roundEnd')
     setTimeout(() => {
       confetti({
@@ -101,10 +115,24 @@ export default function FinalLeaderboard() {
         colors: ['#fbbf24', '#f59e0b', '#10b981', '#ffffff', '#34d399', '#60a5fa'],
       })
     }, 300)
-  }, [ranked.length > 0])
+  }, [ready])
 
   // Check if any tie exists (same sessionScore, same roundsFailed)
   const hasTies = ranked.some((p, i) => i > 0 && p.rank === ranked[i - 1].rank)
+
+  // Hold a brief tallying state until round results are in, so the standings
+  // render correct from the first paint instead of flashing stale numbers.
+  if (!ready) {
+    return (
+      <div className="mx-auto flex min-h-svh w-full max-w-lg flex-col items-center justify-center gap-2 px-4">
+        <p className="text-[11px] uppercase tracking-[0.25em] text-amber-500/65">Game Over</p>
+        <h1 className="text-2xl font-bold text-amber-300" style={{ fontFamily: 'Cinzel, serif' }}>
+          Final Standings
+        </h1>
+        <p className="mt-2 text-sm text-zinc-500">Tallying final scores…</p>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-lg flex-col items-center gap-5 px-4 pb-10 pt-10 sm:px-6">
