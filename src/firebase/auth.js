@@ -17,17 +17,19 @@ import { auth, db, isFirebaseConfigured } from './config.js'
 
 const googleProvider = new GoogleAuthProvider()
 
-// signInWithPopup is unreliable on mobile and especially inside an
-// iOS "Add to Home Screen" standalone app — it can hang or fail silently
-// instead of throwing a catchable error, which is what left users stuck.
-// Go straight to redirect there instead of waiting for popup to fail.
+// signInWithRedirect bounces back to the sign-in page on browsers that
+// partition cross-domain storage (Safari/iOS, Chrome 3p-cookie blocking):
+// auth happens on firebaseapp.com but the result can't be read back on
+// web.app, so getRedirectResult returns null. Popup avoids that entirely.
+// Only the iOS home-screen (standalone) app truly needs redirect, because
+// popups there can hang silently instead of throwing a catchable error.
 function shouldUseRedirect() {
   if (typeof window === 'undefined') return false
   const isStandalone =
     window.matchMedia?.('(display-mode: standalone)').matches ||
     window.navigator?.standalone === true
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(window.navigator?.userAgent ?? '')
-  return isStandalone || isMobile
+  const isIos = /iPhone|iPad|iPod/i.test(window.navigator?.userAgent ?? '')
+  return isStandalone && isIos
 }
 
 function resolveDisplayName(user) {
