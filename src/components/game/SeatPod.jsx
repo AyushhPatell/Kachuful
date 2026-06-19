@@ -74,9 +74,12 @@ export default function SeatPod({
           </div>
         )}
 
-        {/* Dealer chip */}
+        {/* Dealer chip — shared layoutId animates it sliding to the next
+            dealer's seat when the deal rotates each round */}
         {isDealer && (
-          <div
+          <motion.div
+            layoutId="dealer-chip"
+            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
             className="absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold"
             style={{
               background: 'linear-gradient(135deg, #fbbf24, #d97706)',
@@ -86,7 +89,7 @@ export default function SeatPod({
             }}
           >
             D
-          </div>
+          </motion.div>
         )}
 
         <PlayerAvatar

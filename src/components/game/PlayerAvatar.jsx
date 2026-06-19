@@ -25,7 +25,7 @@ function colorForName(name) {
   return COLORS[Math.abs(hash) % COLORS.length]
 }
 
-export default function PlayerAvatar({ name, photoURL, size = 'md', glow = false, className = '' }) {
+export default function PlayerAvatar({ name, photoURL, size = 'md', glow = false, ringColor = null, className = '' }) {
   const [imgFailed, setImgFailed] = useState(false)
   const sizes = {
     sm: { box: 'h-8 w-8', text: 'text-[10px]' },
@@ -36,6 +36,8 @@ export default function PlayerAvatar({ name, photoURL, size = 'md', glow = false
 
   const glowStyle = glow
     ? { boxShadow: '0 0 0 2.5px rgba(245,158,11,0.95), 0 0 14px rgba(245,158,11,0.5)' }
+    : ringColor
+    ? { boxShadow: `0 0 0 2.5px ${ringColor}, 0 2px 8px rgba(0,0,0,0.45)` }
     : { boxShadow: '0 2px 8px rgba(0,0,0,0.45)' }
 
   if (photoURL && !imgFailed) {

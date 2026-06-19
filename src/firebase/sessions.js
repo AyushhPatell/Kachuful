@@ -196,6 +196,27 @@ export async function initiateRematch(oldCode, displayName) {
   return newCode
 }
 
+/**
+ * Fetch every completed round's per-player results for a session, sorted by
+ * round number. Used to render the round-by-round breakdown on the final
+ * leaderboard. Each entry: { roundNumber, sar, results: { [id]: {call, won, points} } }.
+ */
+export async function fetchSessionRounds(code) {
+  if (!isFirebaseConfigured) return []
+  const snap = await getDocs(collection(db, 'sessions', code, 'rounds'))
+  return snap.docs
+    .map((d) => {
+      const data = d.data()
+      return {
+        roundNumber: data.roundNumber ?? Number(d.id) ?? 0,
+        sar: data.sar ?? null,
+        results: data.results ?? {},
+      }
+    })
+    .filter((r) => Object.keys(r.results).length > 0)
+    .sort((a, b) => a.roundNumber - b.roundNumber)
+}
+
 function mapJoinRequestDoc(userId, data) {
   return {
     userId,
