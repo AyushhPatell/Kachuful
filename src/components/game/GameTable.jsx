@@ -150,20 +150,7 @@ export default function GameTable({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {sarInfo ? (
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={sar}
-                  initial={{ rotateY: 90, scale: 0.7, opacity: 0 }}
-                  animate={{ rotateY: 0, scale: 1, opacity: 1 }}
-                  exit={{ opacity: 0, scale: 0.85 }}
-                  transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-                  style={{ transformPerspective: 600 }}
-                >
-                  <SarBadge sar={sar} compact />
-                </motion.div>
-              </AnimatePresence>
-            ) : null}
+            {sarInfo ? <SarBadge sar={sar} compact /> : null}
             {sessionCode ? (
               <GameMenu
                 sessionCode={sessionCode}
@@ -212,6 +199,9 @@ export default function GameTable({
             return null
           })}
         </div>
+
+        {/* Trump reveal — prominent center announcement at the start of each round */}
+        <SarReveal sar={sar} roundNumber={roundNumber} reducedMotion={reducedMotion} />
 
         {/* Center: deck + trick */}
         <div className="absolute left-1/2 top-[44%] z-[15] flex min-h-[100px] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center px-4">
@@ -367,6 +357,92 @@ export default function GameTable({
         ) : null}
       </TableSurface>
     </section>
+  )
+}
+
+/**
+ * Center-table trump announcement. Scales in with a pulse, holds, then fades
+ * out — fired once whenever a new round starts (roundNumber changes). It is
+ * pointer-events-none and auto-dismisses, so it never blocks dealing or play.
+ */
+function SarReveal({ sar, roundNumber, reducedMotion }) {
+  const [show, setShow] = useState(false)
+
+  useEffect(() => {
+    if (!sar || !roundNumber || roundNumber < 1) return undefined
+    setShow(true)
+    const t = setTimeout(() => setShow(false), 2300)
+    return () => clearTimeout(t)
+  }, [roundNumber, sar])
+
+  const info = sar ? SAR_INFO[sar] : null
+  if (!info) return null
+
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          className="pointer-events-none absolute inset-0 z-[25] flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <motion.div
+            className="relative flex flex-col items-center"
+            style={{ transformPerspective: 700 }}
+            initial={reducedMotion ? { opacity: 0 } : { scale: 0.3, opacity: 0, rotateY: 55 }}
+            animate={
+              reducedMotion
+                ? { opacity: 1 }
+                : { scale: [0.3, 1.12, 1, 1.06, 1], opacity: [0, 1, 1, 1, 1], rotateY: [55, 0, 0, 0, 0] }
+            }
+            exit={
+              reducedMotion
+                ? { opacity: 0 }
+                : { scale: 1.22, opacity: 0, transition: { duration: 0.45, ease: 'easeIn' } }
+            }
+            transition={{ duration: 1.1, times: [0, 0.3, 0.5, 0.75, 1], ease: 'easeOut' }}
+          >
+            <div
+              className="absolute -inset-10 rounded-full"
+              style={{
+                background: 'radial-gradient(circle, rgba(201,150,58,0.32), transparent 70%)',
+                filter: 'blur(10px)',
+              }}
+            />
+            <div
+              className="relative flex flex-col items-center gap-1 rounded-2xl px-9 py-5"
+              style={{
+                background: 'rgba(14,18,12,0.84)',
+                border: '1.5px solid rgba(201,150,58,0.55)',
+                boxShadow: '0 12px 48px rgba(0,0,0,0.6), 0 0 32px rgba(201,150,58,0.28)',
+                backdropFilter: 'blur(6px)',
+              }}
+            >
+              <span
+                className="text-[10px] font-semibold uppercase tracking-[0.35em] text-amber-400/80"
+                style={{ fontFamily: 'Cinzel, serif' }}
+              >
+                Trump
+              </span>
+              <span
+                className={`text-6xl leading-none ${info.color}`}
+                style={{ textShadow: '0 2px 14px rgba(0,0,0,0.5)' }}
+              >
+                {info.symbol}
+              </span>
+              <span
+                className="text-lg font-bold text-amber-200"
+                style={{ fontFamily: 'Cinzel, serif' }}
+              >
+                Sar {info.name}
+              </span>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
