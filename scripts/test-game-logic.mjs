@@ -144,11 +144,18 @@ assert.equal(
   getFinalTrickCallout([{ name: 'Ayush', call: 2, tricksWon: 1 }, { name: 'Brij', call: 1, tricksWon: 1 }]),
   'Ayush needs this trick!',
 )
+// Multiple players in contention → no generic banner (the annoying common-sense case)
 assert.equal(
   getFinalTrickCallout([{ name: 'A', call: 2, tricksWon: 1 }, { name: 'B', call: 1, tricksWon: 0 }]),
-  'Last trick decides it!',
+  null,
 )
-assert.equal(getFinalTrickCallout([{ name: 'A', call: 0, tricksWon: 0 }]), 'Final trick — hold your nerve!')
+// Exactly one player must avoid winning to keep their call → named banner
+assert.equal(getFinalTrickCallout([{ name: 'A', call: 0, tricksWon: 0 }]), 'A must dodge this trick!')
+// Two players must dodge → no generic banner
+assert.equal(
+  getFinalTrickCallout([{ name: 'A', call: 0, tricksWon: 0 }, { name: 'B', call: 1, tricksWon: 1 }]),
+  null,
+)
 assert.equal(getFinalTrickCallout([{ name: 'A', call: 3, tricksWon: 0 }]), null) // already out of reach
 
 const dealOrder = buildDealSequence(['a', 'b', 'c'], 2, 1)
