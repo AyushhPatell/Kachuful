@@ -31,6 +31,7 @@ export default function PlayerAvatar({ name, photoURL, size = 'md', glow = false
     sm: { box: 'h-8 w-8', text: 'text-[10px]' },
     md: { box: 'h-10 w-10', text: 'text-xs' },
     lg: { box: 'h-12 w-12', text: 'text-sm' },
+    xl: { box: 'h-14 w-14', text: 'text-base' },
   }
   const s = sizes[size] ?? sizes.md
 

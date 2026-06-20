@@ -27,6 +27,20 @@ function usePrefersReducedMotion() {
   return reduced
 }
 
+// True on laptops / tablets in landscape (≥1024px). Used to scale the table up
+// — bigger cards and a wider hand fan — without touching the mobile layout.
+function useIsLargeScreen() {
+  const [large, setLarge] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    setLarge(mq.matches)
+    const handler = () => setLarge(mq.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return large
+}
+
 function getRoundPoints(player, round) {
   const stored = round?.results?.[player.id]
   if (stored) return stored.points ?? 0
@@ -72,6 +86,7 @@ export default function GameTable({
   const seatPositions = getSeatPositions(seated.length)
   const sarInfo = sar ? SAR_INFO[sar] : null
   const reducedMotion = usePrefersReducedMotion()
+  const largeScreen = useIsLargeScreen()
 
   const centerCards = trickReveal?.cards?.length ? trickReveal.cards : (cardsOnTable ?? [])
   const trickWinnerId = trickReveal?.winnerId
@@ -206,6 +221,7 @@ export default function GameTable({
                     callingPhase={callingPhase}
                     isDealer={dealerPlayerId === player.id}
                     compact={seated.length > 4}
+                    large={largeScreen}
                   />
                 </div>
               )
@@ -217,28 +233,29 @@ export default function GameTable({
         {/* Trump reveal — prominent center announcement at the start of each round */}
         <SarReveal sar={sar} roundNumber={roundNumber} reducedMotion={reducedMotion} />
 
-        {/* Clutch callout — the deciding final trick of the round */}
+        {/* Clutch callout — the deciding final trick. Sits in the clear lower
+            band so it never collides with the top seat pods or the played cards. */}
         <AnimatePresence>
           {finalTrickCallout ? (
             <motion.div
               key={finalTrickCallout}
-              initial={{ opacity: 0, y: -8, scale: 0.9 }}
+              initial={{ opacity: 0, y: 6, scale: 0.92 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
+              exit={{ opacity: 0, scale: 0.92 }}
               transition={{ type: 'spring', stiffness: 360, damping: 24 }}
-              className="pointer-events-none absolute left-1/2 top-[13%] z-30 -translate-x-1/2 whitespace-nowrap"
+              className="pointer-events-none absolute left-1/2 top-[64%] z-[18] -translate-x-1/2 whitespace-nowrap"
             >
               <div
-                className="flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold text-amber-100"
+                className="flex items-center gap-1.5 rounded-full px-3.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-100 lg:text-[12px]"
                 style={{
-                  background: 'rgba(120,30,20,0.72)',
-                  border: '1px solid rgba(251,146,60,0.45)',
-                  boxShadow: '0 0 22px rgba(239,68,68,0.22)',
+                  background: 'rgba(60,18,12,0.82)',
+                  border: '1px solid rgba(251,146,60,0.4)',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.45)',
                   backdropFilter: 'blur(6px)',
                   fontFamily: 'Cinzel, serif',
                 }}
               >
-                <span>🔥</span>
+                <span className="text-[11px] lg:text-[13px]">🔥</span>
                 {finalTrickCallout}
               </div>
             </motion.div>
@@ -394,6 +411,7 @@ export default function GameTable({
               reducedMotion={reducedMotion}
               isMyTurn={localIsTurn && tablePhase === 'playing'}
               sar={sar}
+              large={largeScreen}
             />
           </div>
         ) : null}
