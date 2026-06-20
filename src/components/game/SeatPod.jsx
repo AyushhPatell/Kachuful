@@ -15,6 +15,7 @@ export default function SeatPod({
   callingPhase,
   isDealer = false,
   compact = false,
+  large = false,
 }) {
   const isCalling = callingPhase && isTurn
   const isActive = isTurn && !showRoundScores
@@ -33,7 +34,11 @@ export default function SeatPod({
   const paceState = pacePossible == null ? null : pacePossible ? 'ontrack' : 'busted'
 
   return (
-    <div className="flex flex-col items-center gap-1" style={{ width: compact ? 76 : 94 }}>
+    <div
+      className={`flex flex-col items-center gap-1 ${
+        compact ? 'w-[76px] lg:w-[94px]' : 'w-[94px] lg:w-[118px]'
+      }`}
+    >
 
       {/* Main pod */}
       <motion.div
@@ -115,11 +120,11 @@ export default function SeatPod({
         <PlayerAvatar
           name={player.name}
           photoURL={player.photoURL}
-          size={compact ? 'sm' : 'md'}
+          size={large ? (compact ? 'md' : 'xl') : compact ? 'sm' : 'md'}
           glow={isActive}
         />
 
-        <p className="mt-1 max-w-[80px] truncate text-center text-[10px] font-semibold leading-tight text-emerald-50">
+        <p className="mt-1 max-w-[80px] truncate text-center text-[10px] font-semibold leading-tight text-emerald-50 lg:max-w-[104px] lg:text-[12px]">
           {player.name}
         </p>
 

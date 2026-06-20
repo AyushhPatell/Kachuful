@@ -22,6 +22,7 @@ export default function HandFan({
   reducedMotion,
   isMyTurn,
   sar,
+  large = false,
 }) {
   const [selectedId, setSelectedId] = useState(null)
   const [hoveredId, setHoveredId] = useState(null)
@@ -50,11 +51,15 @@ export default function HandFan({
   const count = visible.length
   const center = (count - 1) / 2
   const stepDeg = count === 1 ? 0 : count === 2 ? 12 : count <= 4 ? 9 : count <= 6 ? 7 : 5.5
-  const stepPx  = count === 1 ? 0 : count === 2 ? 56 : count <= 3 ? 48 : count <= 5 ? 40 : count <= 7 ? 30 : 24
+  // Wider per-card spacing on large screens so big hands (6+) don't clutter and
+  // overlap; mobile keeps its tighter spacing so the fan still fits the width.
+  const stepPx = large
+    ? (count === 1 ? 0 : count === 2 ? 84 : count <= 3 ? 76 : count <= 5 ? 64 : count <= 7 ? 56 : 50)
+    : (count === 1 ? 0 : count === 2 ? 56 : count <= 3 ? 48 : count <= 5 ? 40 : count <= 7 ? 30 : 24)
 
   return (
     <div
-      className={`relative mx-auto flex h-[7.5rem] w-full max-w-xl items-end justify-center pb-1 sm:h-32 ${
+      className={`relative mx-auto flex h-[7.5rem] w-full max-w-xl items-end justify-center pb-1 sm:h-32 lg:h-44 lg:max-w-3xl ${
         dimmed ? 'opacity-40' : ''
       } ${isMyTurn && !faceDown ? 'drop-shadow-[0_0_28px_rgba(245,158,11,0.3)]' : ''}`}
     >

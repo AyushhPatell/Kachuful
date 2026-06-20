@@ -40,18 +40,18 @@ function CardBack({ className = '' }) {
 
 const SIZES = {
   small: {
-    w: 'w-[2.85rem] sm:w-[3.1rem]',
-    h: 'h-[4.25rem] sm:h-[4.75rem]',
-    rankSize: 'text-[10px] sm:text-[11px]',
-    suitSize: 'text-[16px] sm:text-[18px]',
-    p: 'p-[3px]',
+    w: 'w-[2.85rem] sm:w-[3.1rem] lg:w-[3.9rem]',
+    h: 'h-[4.25rem] sm:h-[4.75rem] lg:h-[5.9rem]',
+    rankSize: 'text-[10px] sm:text-[11px] lg:text-[13px]',
+    suitSize: 'text-[16px] sm:text-[18px] lg:text-[22px]',
+    p: 'p-[3px] lg:p-1',
   },
   hand: {
-    w: 'w-[3.1rem] sm:w-[3.5rem]',
-    h: 'h-[4.6rem] sm:h-[5.2rem]',
-    rankSize: 'text-[11px] sm:text-[12px]',
-    suitSize: 'text-[18px] sm:text-[22px]',
-    p: 'p-[3px] sm:p-1',
+    w: 'w-[3.1rem] sm:w-[3.5rem] lg:w-[4.5rem]',
+    h: 'h-[4.6rem] sm:h-[5.2rem] lg:h-[6.7rem]',
+    rankSize: 'text-[11px] sm:text-[12px] lg:text-[15px]',
+    suitSize: 'text-[18px] sm:text-[22px] lg:text-[28px]',
+    p: 'p-[3px] sm:p-1 lg:p-1.5',
   },
   compact: {
     w: 'w-[2rem] sm:w-[2.2rem]',
@@ -61,11 +61,11 @@ const SIZES = {
     p: 'p-[2px]',
   },
   default: {
-    w: 'w-[3.5rem] sm:w-[4.5rem]',
-    h: 'h-[5rem] sm:h-[6.5rem]',
-    rankSize: 'text-[12px] sm:text-[14px]',
-    suitSize: 'text-[20px] sm:text-[26px]',
-    p: 'p-1',
+    w: 'w-[3.5rem] sm:w-[4.5rem] lg:w-[5.25rem]',
+    h: 'h-[5rem] sm:h-[6.5rem] lg:h-[7.5rem]',
+    rankSize: 'text-[12px] sm:text-[14px] lg:text-[16px]',
+    suitSize: 'text-[20px] sm:text-[26px] lg:text-[30px]',
+    p: 'p-1 lg:p-1.5',
   },
 }
 
