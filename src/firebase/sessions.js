@@ -864,6 +864,20 @@ export function subscribeToSession(code, onChange) {
   })
 }
 
+// One-off reads used to force-refresh state when a live listener may have
+// stalled (tab backgrounded, network flapped). Powers stuck-state recovery.
+export async function fetchSessionOnce(code) {
+  if (!isFirebaseConfigured) return null
+  const snap = await getDoc(sessionsRef(code))
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null
+}
+
+export async function fetchPlayersOnce(code) {
+  if (!isFirebaseConfigured) return []
+  const snap = await getDocs(query(playersCollection(code), orderBy('joinOrder')))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
 export function subscribeToPlayers(code, onChange) {
   if (!isFirebaseConfigured) return () => {}
 

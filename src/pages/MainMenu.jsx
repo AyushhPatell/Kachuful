@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { GoogleSignInButton } from '../components/ui/Button.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useIsAdmin } from '../hooks/useIsAdmin.js'
 import { ensureSignedIn, signInWithGoogle, signOutUser } from '../firebase/auth.js'
 import { createSession, requestJoinSession } from '../firebase/sessions.js'
 import { isValidSessionCode, normalizeSessionCode } from '../lib/sessionCode.js'
@@ -20,6 +21,7 @@ const SUITS = [
 export default function MainMenu() {
   const navigate = useNavigate()
   const { user, displayName, isSignedIn, authReady, authTimedOut, isFirebaseConfigured, setLoading, setError } = useAuth()
+  const isAdmin = useIsAdmin()
   const [joinCode, setJoinCode] = useState('')
   const [localError, setLocalError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -258,6 +260,15 @@ export default function MainMenu() {
               >
                 View Session History
               </button>
+
+              {isAdmin && (
+                <button
+                  onClick={() => navigate('/admin')}
+                  className="w-full py-2 text-sm text-amber-500/70 transition-colors hover:text-amber-400"
+                >
+                  ⚙ Admin Panel
+                </button>
+              )}
             </>
           )}
         </motion.div>
