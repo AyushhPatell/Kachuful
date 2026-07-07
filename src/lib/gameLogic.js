@@ -97,16 +97,18 @@ export function isCallStillPossible(call, tricksWon, cardsLeft) {
 
 /**
  * Drama line for the final trick of a round. `inRound` is the players still
- * holding their last card: [{ name, call, tricksWon }]. Returns a short
- * callout string, or null when nobody's call hinges on this trick.
+ * holding their last card: [{ name, call, tricksWon }]. Only fires when it can
+ * name ONE specific player and their specific stake — no generic "last trick
+ * decides it" announcements (those state the obvious and got annoying). Returns
+ * a short callout string, or null.
  */
 export function getFinalTrickCallout(inRound) {
   const live = (inRound ?? []).filter((p) => p.call != null)
   const needWin = live.filter((p) => p.call - (p.tricksWon ?? 0) === 1)
-  const mustAvoid = live.filter((p) => (p.tricksWon ?? 0) === p.call)
   if (needWin.length === 1) return `${needWin[0].name} needs this trick!`
-  if (needWin.length >= 2) return 'Last trick decides it!'
-  if (mustAvoid.length >= 1) return 'Final trick — hold your nerve!'
+  if (needWin.length > 0) return null // multiple in contention — no generic banner
+  const mustAvoid = live.filter((p) => (p.tricksWon ?? 0) === p.call)
+  if (mustAvoid.length === 1) return `${mustAvoid[0].name} must dodge this trick!`
   return null
 }
 

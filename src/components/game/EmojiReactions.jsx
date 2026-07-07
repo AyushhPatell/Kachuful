@@ -4,7 +4,7 @@ import { deleteField, updateDoc } from 'firebase/firestore'
 import { db } from '../../firebase/config.js'
 import { sessionsRef } from '../../firebase/sessions.js'
 
-const EMOJIS = ['👍', '😂', '🔥', '😤', '🎉', '💀']
+const EMOJIS = ['👍', '😂', '🔥', '😤', '🖕', '🎉', '💀']
 const REACTION_TTL_MS = 3500
 
 function useReactions(session, seated, currentUserId) {

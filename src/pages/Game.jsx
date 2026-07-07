@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import BottomSheet from '../components/game/BottomSheet.jsx'
 import CallPicker from '../components/game/CallPicker.jsx'
@@ -14,6 +14,8 @@ import {
   advanceToNextRound,
   claimHostRole,
   endSessionNow,
+  fetchPlayersOnce,
+  fetchSessionOnce,
   hasPendingJoinRequest,
   initiateEndVote,
   isPlayerOffline,
@@ -59,6 +61,8 @@ export default function Game() {
   const [round, setRound] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [staleWarning, setStaleWarning] = useState(false)
+  const [resyncNonce, setResyncNonce] = useState(0)
   const [newRequestPing, setNewRequestPing] = useState(false)
   const [pendingFromSubcollection, setPendingFromSubcollection] = useState(false)
   const [tablePhase, setTablePhase] = useState('playing')
@@ -176,11 +180,38 @@ export default function Game() {
     }
   }, [showCallPicker])
 
+  // resyncNonce is bumped by the stuck-state watchdog to tear down and rebuild
+  // the listeners — the reliable cure for a Firestore onSnapshot that has wedged.
   useEffect(() => {
     const unsubSession = subscribeToSession(code, setSession)
     const unsubPlayers = subscribeToPlayers(code, setPlayers)
     return () => { unsubSession(); unsubPlayers() }
+  }, [code, resyncNonce])
+
+  // Force a fresh read of session + players. A Firestore onSnapshot listener can
+  // silently stall after the tab is backgrounded or the network flaps; this
+  // pulls the real state so a stuck player recovers without a full reload.
+  const resync = useCallback(async () => {
+    if (!code) return
+    try {
+      const [s, pl] = await Promise.all([fetchSessionOnce(code), fetchPlayersOnce(code)])
+      if (s) setSession(s)
+      if (pl.length) setPlayers(pl)
+    } catch {
+      // best effort — the live listener may recover on its own
+    }
   }, [code])
+
+  // Re-sync whenever the tab regains focus or the network comes back.
+  useEffect(() => {
+    function onVisible() { if (document.visibilityState === 'visible') resync() }
+    window.addEventListener('online', resync)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('online', resync)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [resync])
 
   useEffect(() => {
     if (!currentUserId || me) return undefined
@@ -459,6 +490,29 @@ export default function Game() {
     return () => clearInterval(interval)
   }, [isOwner, playingPhase, callingPhase, currentTurnPlayerId, code, currentUserId])
 
+  // Stuck-state watchdog (any player). No legal turn can outlast the 40s turn
+  // timer + host auto-play, so if someone else's turn appears to run far longer,
+  // this device's live listener has stalled. Try a silent resync first; if it's
+  // still stuck a bit later, surface a "reload" banner.
+  useEffect(() => {
+    const startedAt = session?.currentTurnStartedAt
+    if ((!playingPhase && !callingPhase) || !startedAt || currentTurnPlayerId === currentUserId) {
+      setStaleWarning(false)
+      return undefined
+    }
+    let resyncTried = false
+    const interval = setInterval(() => {
+      const age = Date.now() - startedAt
+      if (age > 48_000 && !resyncTried) {
+        resyncTried = true
+        resync() // immediate fresh data
+        setResyncNonce((n) => n + 1) // rebuild the (possibly wedged) listeners
+      }
+      if (age > 63_000) setStaleWarning(true)
+    }, 4000)
+    return () => { clearInterval(interval); setStaleWarning(false) }
+  }, [playingPhase, callingPhase, currentTurnPlayerId, session?.currentTurnStartedAt, currentUserId, resync])
+
   // ── auto host-election when host tab closes without clicking Leave ───────────
   useEffect(() => {
     if (!session || session.ownerId === currentUserId) return
@@ -668,6 +722,23 @@ export default function Game() {
           <EmojiPicker sessionCode={code} userId={currentUserId} disabled={tablePhase === 'round-scores'} />
         </div>
       )}
+
+      {/* Stuck-state banner — this device's live updates appear to have stalled */}
+      {staleWarning ? (
+        <button
+          onClick={() => window.location.reload()}
+          className="absolute left-1/2 top-14 z-[60] flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[12px] font-bold text-amber-950"
+          style={{
+            background: 'linear-gradient(135deg, #fcd34d, #f59e0b)',
+            boxShadow: '0 6px 24px rgba(0,0,0,0.55)',
+            border: '1px solid rgba(255,255,255,0.35)',
+          }}
+        >
+          <span>⚠️</span>
+          <span>Game not updating? Tap to reload</span>
+          <span className="rounded-full bg-black/15 px-1.5 py-0.5 text-[13px] leading-none">↻</span>
+        </button>
+      ) : null}
 
       {error ? (
         <div

@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import BroadcastBanner from './components/BroadcastBanner.jsx'
 
 // Route-level code splitting: keeps a flaky mobile connection from having to
 // pull down the entire app in one shot just to render the sign-in screen.
@@ -10,6 +11,7 @@ const Lobby = lazy(() => import('./pages/Lobby.jsx'))
 const Game = lazy(() => import('./pages/Game.jsx'))
 const History = lazy(() => import('./pages/History.jsx'))
 const FinalLeaderboard = lazy(() => import('./pages/FinalLeaderboard.jsx'))
+const Admin = lazy(() => import('./pages/Admin.jsx'))
 
 function RouteFallback() {
   return (
@@ -24,6 +26,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <BrowserRouter>
+          <BroadcastBanner />
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<MainMenu />} />
@@ -31,6 +34,7 @@ export default function App() {
               <Route path="/game/:code" element={<Game />} />
               <Route path="/history" element={<History />} />
               <Route path="/leaderboard/:code" element={<FinalLeaderboard />} />
+              <Route path="/admin" element={<Admin />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
