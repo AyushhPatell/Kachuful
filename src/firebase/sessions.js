@@ -60,6 +60,17 @@ function roundRef(code, roundNumber) {
   return doc(db, 'sessions', code, 'rounds', String(roundNumber))
 }
 
+// A player's SECRET cards live here, separate from the public player doc, so
+// security rules can keep them readable only by their owner (+ the host, for
+// dealing/auto-play). The public player doc keeps only `handCount`.
+function handRef(code, userId) {
+  return doc(db, 'sessions', code, 'hands', userId)
+}
+
+function handsCollection(code) {
+  return collection(db, 'sessions', code, 'hands')
+}
+
 function joinRequestsCollection(code) {
   return collection(db, 'sessions', code, 'joinRequests')
 }
@@ -120,15 +131,16 @@ async function beginRound(code, sessionRound, activePlayers, firstDealerIndex) {
   })
 
   await Promise.all(
-    activePlayers.map((player) =>
+    activePlayers.flatMap((player) => [
       updateDoc(playerRef(code, player.id), {
-        hand: hands[player.id],
         handCount: cardsPerRound,
         call: null,
         tricksWon: 0,
         status: 'active',
       }),
-    ),
+      // Secret cards go to the private per-player hand doc, never the player doc.
+      setDoc(handRef(code, player.id), { hand: hands[player.id] }),
+    ]),
   )
 
   await setDoc(roundRef(code, sessionRound), {
@@ -170,7 +182,6 @@ export async function createSession(displayName) {
     name: displayName,
     photoURL: auth.currentUser.photoURL ?? null,
     status: 'active',
-    hand: [],
     handCount: 0,
     call: null,
     tricksWon: 0,
@@ -321,7 +332,6 @@ export async function acceptJoinRequest(code, request) {
       name: request.name,
       photoURL: request.photoURL ?? null,
       status: isSpectator ? 'spectator' : 'active',
-      hand: [],
       handCount: 0,
       call: null,
       tricksWon: 0,
@@ -503,13 +513,15 @@ async function deleteSessionEverywhere(sessionCode, participantIds) {
     participantIds.map((id) => deleteDoc(sessionHistoryRef(id, sessionCode)).catch(() => {})),
   )
   try {
-    const [playerDocs, roundDocs] = await Promise.all([
+    const [playerDocs, roundDocs, handDocs] = await Promise.all([
       getDocs(playersCollection(sessionCode)),
       getDocs(collection(db, 'sessions', sessionCode, 'rounds')),
+      getDocs(handsCollection(sessionCode)),
     ])
     await Promise.all([
       ...playerDocs.docs.map((d) => deleteDoc(d.ref).catch(() => {})),
       ...roundDocs.docs.map((d) => deleteDoc(d.ref).catch(() => {})),
+      ...handDocs.docs.map((d) => deleteDoc(d.ref).catch(() => {})),
     ])
     await deleteDoc(sessionsRef(sessionCode))
   } catch {
@@ -630,11 +642,11 @@ export async function submitCall(code, roundNumber, userId, call) {
 export async function playCard(code, userId, card) {
   await runTransaction(db, async (transaction) => {
     const sessionDoc = await transaction.get(sessionsRef(code))
-    const playerDoc = await transaction.get(playerRef(code, userId))
-    if (!sessionDoc.exists() || !playerDoc.exists()) throw new Error('Session not found')
-
+    if (!sessionDoc.exists()) throw new Error('Session not found')
     const liveSession = sessionDoc.data()
+
     const roundDoc = await transaction.get(roundRef(code, liveSession.currentRound))
+    const handDoc = await transaction.get(handRef(code, userId))
     if (liveSession.lastTrickReveal) throw new Error('Wait for the trick result')
     if (liveSession.currentTurn !== userId) throw new Error('Not your turn')
 
@@ -642,7 +654,8 @@ export async function playCard(code, userId, card) {
       liveSession,
       roundDoc.exists() ? roundDoc.data() : null,
     )
-    const hand = playerDoc.data().hand ?? []
+    // Secret cards come from the player's private hand doc, not the player doc.
+    const hand = handDoc.data()?.hand ?? []
     const cardInHand = hand.find((c) => c.id === card.id)
     if (!cardInHand) throw new Error('Card not in your hand')
 
@@ -659,8 +672,10 @@ export async function playCard(code, userId, card) {
     const playerDataById = Object.fromEntries(
       turnOrder.map((id, i) => [id, playerSnaps[i].data() ?? {}]),
     )
+    // Trick logic (who still holds cards / who's next) only needs hand COUNTS,
+    // never the actual cards — so the public handCount is enough for everyone.
     const handsById = Object.fromEntries(
-      turnOrder.map((id) => [id, playerDataById[id].hand ?? []]),
+      turnOrder.map((id) => [id, new Array(playerDataById[id].handCount ?? 0)]),
     )
 
     let trickExpectedCount = liveSession.trickExpectedCount
@@ -669,13 +684,14 @@ export async function playCard(code, userId, card) {
     }
 
     const newHand = hand.filter((c) => c.id !== card.id)
-    handsById[userId] = newHand
+    handsById[userId] = new Array(newHand.length)
 
     const cardsOnTable = [...prevTable, { userId, card: cardInHand }]
 
     if (cardsOnTable.length < trickExpectedCount) {
       const nextTurn = getNextTrickPlayer(turnOrder, handsById, cardsOnTable, userId)
-      transaction.update(playerRef(code, userId), { hand: newHand, handCount: newHand.length })
+      transaction.set(handRef(code, userId), { hand: newHand })
+      transaction.update(playerRef(code, userId), { handCount: newHand.length })
       transaction.update(sessionsRef(code), {
         cardsOnTable,
         currentTurn: nextTurn,
@@ -692,7 +708,8 @@ export async function playCard(code, userId, card) {
     const allEmpty = turnOrder.every((id) => (handsById[id] ?? []).length === 0)
     const winnerName = playerDataById[winner.userId].name ?? 'Player'
 
-    transaction.update(playerRef(code, userId), { hand: newHand, handCount: newHand.length })
+    transaction.set(handRef(code, userId), { hand: newHand })
+    transaction.update(playerRef(code, userId), { handCount: newHand.length })
     transaction.update(playerRef(code, winner.userId), { tricksWon: winnerTricksWon })
 
     transaction.update(sessionsRef(code), {
@@ -885,6 +902,28 @@ export function subscribeToPlayers(code, onChange) {
   return onSnapshot(q, (snap) => {
     onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
   })
+}
+
+// Live subscription to ONLY my own secret hand. Rules keep this doc readable
+// just by its owner (and the host, for auto-play) — opponents never receive it.
+export function subscribeToMyHand(code, userId, onChange) {
+  if (!isFirebaseConfigured || !userId) {
+    onChange([])
+    return () => {}
+  }
+  return onSnapshot(
+    handRef(code, userId),
+    (snap) => onChange(snap.data()?.hand ?? []),
+    () => onChange([]),
+  )
+}
+
+/** One-off read of a player's hand. The host uses this to auto-play for a
+ * disconnected player (and a player to resync their own hand). */
+export async function fetchHandOnce(code, userId) {
+  if (!isFirebaseConfigured || !userId) return []
+  const snap = await getDoc(handRef(code, userId))
+  return snap.data()?.hand ?? []
 }
 
 export function subscribeToRound(code, roundNumber, onChange) {

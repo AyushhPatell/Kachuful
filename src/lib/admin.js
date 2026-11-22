@@ -131,15 +131,17 @@ export async function resetPlayerName(code, uid, name) {
 // ── data & maintenance ────────────────────────────────────────────────────────
 /** Delete a session and every one of its subcollections. */
 export async function deleteSession(code) {
-  const [players, rounds, joinReqs] = await Promise.all([
+  const [players, rounds, joinReqs, hands] = await Promise.all([
     getDocs(playersCol(code)),
     getDocs(roundsCol(code)),
     getDocs(collection(db, 'sessions', code, 'joinRequests')),
+    getDocs(collection(db, 'sessions', code, 'hands')),
   ])
   const batch = writeBatch(db)
   players.docs.forEach((d) => batch.delete(d.ref))
   rounds.docs.forEach((d) => batch.delete(d.ref))
   joinReqs.docs.forEach((d) => batch.delete(d.ref))
+  hands.docs.forEach((d) => batch.delete(d.ref))
   batch.delete(sessionDoc(code))
   await batch.commit()
 }

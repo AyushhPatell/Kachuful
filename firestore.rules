@@ -12,6 +12,16 @@ service cloud.firestore {
         allow read, write: if request.auth != null;
       }
 
+      // SECRET CARDS. A hand is readable/writable only by its owner, or by the
+      // session host (the dealer, who deals every hand and auto-plays for
+      // disconnected players). No other player can read an opponent's cards.
+      match /hands/{playerId} {
+        allow read, write: if request.auth != null && (
+          request.auth.uid == playerId ||
+          get(/databases/$(database)/documents/sessions/$(sessionCode)).data.ownerId == request.auth.uid
+        );
+      }
+
       match /rounds/{roundId} {
         allow read, write: if request.auth != null;
       }
