@@ -68,6 +68,7 @@ export default function GameTable({
   dealTargetPlayerId = null,
   dealSequence = [],
   me,
+  myHand = [],
   handVisible,
   visibleHandCount,
   playableCards = [],
@@ -126,7 +127,7 @@ export default function GameTable({
   const hiddenCardId = flyPlay?.fromLocal ? flyPlay.card?.id : null
   const localPlayer = seated[0]
   // Show the hand grouped by suit and sorted low→high, like arranging real cards.
-  const sortedHand = useMemo(() => sortHandForDisplay(me?.hand ?? []), [me?.hand])
+  const sortedHand = useMemo(() => sortHandForDisplay(myHand), [myHand])
   const localIsTurn = currentTurn === currentUserId
   const timerInitialSeconds = currentTurnStartedAt
     ? Math.max(0, 40 - Math.floor((Date.now() - currentTurnStartedAt) / 1000))

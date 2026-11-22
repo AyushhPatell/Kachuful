@@ -14,6 +14,7 @@ import {
   advanceToNextRound,
   claimHostRole,
   endSessionNow,
+  fetchHandOnce,
   fetchPlayersOnce,
   fetchSessionOnce,
   hasPendingJoinRequest,
@@ -28,6 +29,7 @@ import {
   rejectJoinRequest,
   setPlayerForeground,
   submitCall,
+  subscribeToMyHand,
   subscribeToMyJoinRequest,
   subscribeToPlayers,
   subscribeToRound,
@@ -59,6 +61,7 @@ export default function Game() {
   const [session, setSession] = useState(null)
   const [players, setPlayers] = useState([])
   const [round, setRound] = useState(null)
+  const [myHand, setMyHand] = useState([]) // my own secret cards (private hand doc)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [staleWarning, setStaleWarning] = useState(false)
@@ -160,16 +163,16 @@ export default function Game() {
     if (tablePhase === 'dealing') {
       return cardsDealtToPlayer(dealSequence, dealStep, currentUserId)
     }
-    return me?.hand?.length ?? 0
-  }, [tablePhase, dealSequence, dealStep, currentUserId, me?.hand?.length])
+    return myHand.length
+  }, [tablePhase, dealSequence, dealStep, currentUserId, myHand.length])
 
   const dealTargetPlayerId =
     tablePhase === 'dealing' && dealStep > 0 ? dealSequence[dealStep - 1] : null
 
   const playableCards = useMemo(() => {
-    if (!me?.hand || !playingPhase) return []
-    return getPlayableCards(me.hand, session?.cardsOnTable ?? [])
-  }, [me?.hand, playingPhase, session?.cardsOnTable])
+    if (!playingPhase) return []
+    return getPlayableCards(myHand, session?.cardsOnTable ?? [])
+  }, [myHand, playingPhase, session?.cardsOnTable])
 
   const showCallPicker = !isSpectator && callingPhase && me?.call == null && isMyTurn
 
@@ -187,6 +190,12 @@ export default function Game() {
     const unsubPlayers = subscribeToPlayers(code, setPlayers)
     return () => { unsubSession(); unsubPlayers() }
   }, [code, resyncNonce])
+
+  // My own cards come from a private doc only I (and the host) can read.
+  useEffect(() => {
+    if (!currentUserId) return undefined
+    return subscribeToMyHand(code, currentUserId, setMyHand)
+  }, [code, currentUserId, resyncNonce])
 
   // Force a fresh read of session + players. A Firestore onSnapshot listener can
   // silently stall after the tab is backgrounded or the network flaps; this
@@ -444,9 +453,13 @@ export default function Game() {
     if (!turnPlayer) return undefined
     const isGone = currentTurnPlayerStatus === 'disconnected' || isPlayerOffline(turnPlayer)
     if (!isGone) return undefined
-    const legalCards = getPlayableCards(turnPlayer.hand ?? [], session?.cardsOnTable ?? [])
-    if (legalCards.length === 0) return undefined
-    const timer = setTimeout(() => {
+    const tableAtSetup = session?.cardsOnTable ?? []
+    const timer = setTimeout(async () => {
+      // The host reads the disconnected player's private hand (rules permit the
+      // host) to auto-play a legal card for them. playCard re-validates.
+      const hand = await fetchHandOnce(code, currentTurnPlayerId)
+      const legalCards = getPlayableCards(hand, tableAtSetup)
+      if (legalCards.length === 0) return
       const card = legalCards[Math.floor(Math.random() * legalCards.length)]
       playCard(code, currentTurnPlayerId, card).catch(() => {})
       recordAutoAction(code, currentTurnPlayerId, roundNumber).catch(() => {})
@@ -602,7 +615,7 @@ export default function Game() {
 
   const handVisible =
     !isSpectator &&
-    me?.hand?.length &&
+    myHand.length > 0 &&
     tablePhase !== 'round-scores' &&
     (tablePhase === 'dealing' ||
       round?.status === ROUND_STATUS.PLAYING ||
@@ -682,6 +695,7 @@ export default function Game() {
         dealTargetPlayerId={dealTargetPlayerId}
         dealSequence={dealSequence}
         me={me}
+        myHand={myHand}
         handVisible={handVisible}
         visibleHandCount={visibleHandCount}
         playableCards={playableCards}
@@ -798,7 +812,7 @@ export default function Game() {
       {/* My call/tricks badge — shown during playing phase once I've called.
           Tinted by whether I can still hit my exact call (on-pace glow). */}
       {!isSpectator && me?.call != null && playingPhase ? (() => {
-        const paceOk = isCallStillPossible(me.call, me.tricksWon ?? 0, me.handCount ?? me.hand?.length ?? 0)
+        const paceOk = isCallStillPossible(me.call, me.tricksWon ?? 0, me.handCount ?? myHand.length)
         return (
           <div
             className="pointer-events-none absolute right-3 z-30 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-medium backdrop-blur-sm"

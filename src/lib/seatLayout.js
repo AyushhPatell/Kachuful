@@ -63,9 +63,9 @@ export function getSeatHandCount(player, meId, ctx) {
     return cardsDealtToPlayer(dealSequence, dealStep, player.id)
   }
 
+  // handCount is public on the player doc; actual cards live in the private
+  // hand doc and are never available for other players here.
   if (player.handCount != null) return player.handCount
-  if (player.id === meId) return player.hand?.length ?? 0
-  if (player.hand?.length != null) return player.hand.length
 
   return cardsPerRound
 }
